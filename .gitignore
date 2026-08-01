@@ -1,0 +1,12 @@
+# Reference Python library source (pinned submodule/clone)
+textdistance/
+
+# Target build output directories
+target/
+textdistancerust/target/
+
+# Python / Hypothesis cache directories
+__pycache__/
+*.pyc
+.hypothesis/
+.pytest_cache/
