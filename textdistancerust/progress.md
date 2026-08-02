@@ -3,7 +3,7 @@
 ## Project Status Overview
 - **Repository**: `textdistancerust/` (Standalone Rust package)
 - **Active Track**: Person B (Tokenizer, Simple, Token-based, & Phonetic Metrics)
-- **Current Step**: Step 6 (`Jaccard` Metric)
+- **Current Step**: Step 12 (`Bag` Metric)
 - **Verification Strategy**: Continuous differential fuzzing against Python `textdistance` reference via persistent IPC (10,000+ iterations per algorithm minimum).
 
 ---
@@ -130,10 +130,105 @@
 - Implemented `Matrix` struct conforming to `SimilarityMetric<T>`.
 - Supports optional custom substitution score map `mat: Option<HashMap<(T, T), f64>>`, configurable `match_cost` (default `1.0`), `mismatch_cost` (default `0.0`), and `symmetric` flag (default `true`).
 - Performs direct match lookup, symmetric pair fallback lookup, identity check fallback (`match_cost`), and default mismatch fallback (`mismatch_cost`).
+- Represented `mat` JSON payloads as a list of `[s1, s2, score]` triples (`Vec<(String, String, f64)>`) to avoid non-standard JSON composite string keys.
 - Verified empty-input parity (`("", "")` returning `sim=match_cost (1.0), dist=0.0, max=1.0, norm_sim=1.0, norm_dist=0.0`).
 - Added unit tests `test_matrix_default_same`, `test_matrix_default_different`, `test_matrix_empty`, `test_matrix_custom_map`.
 - Integrated `"matrix"` string handler into `src/main.rs`.
-- Fuzzed 10,000 iterations over persistent IPC with **0 mismatches in 6.19s**.
+- Fuzzed 10,000 iterations over persistent IPC with **0 mismatches in 12.23s** (randomizing `mat` triple arrays in Hypothesis).
+
+---
+
+### Step 6: `Jaccard` Similarity Metric ([`src/jaccard.rs`](file:///c:/Projects/Post_Mortem/textdistancerust/src/jaccard.rs))
+- **Status**: Completed & Verified (10,000 / 10,000 iterations passed, 0 mismatches)
+- **Date**: August 2, 2026
+
+#### Detailed Technical Summary:
+- Implemented `Jaccard` struct conforming to `SimilarityMetric<T>`.
+- Supports multiset counts (`as_set = false`) and unique set intersections (`as_set = true`), as well as configurable tokenization (`qval = 1` scalar chars, `qval > 1` $q$-grams, `qval = 0` whitespace words).
+- Evaluates raw identity (`req.s1 == req.s2`) first, returning `1.0` for identical inputs (e.g. `("", "")`).
+- Handles zero-union token sets safely in Rust (`union == 0` $\rightarrow$ `similarity = 0.0`), preventing division by zero when non-equal inputs yield empty $q$-gram token lists.
+- Documented upstream Python bug where `textdistance.Jaccard(qval=2)('0', '1')` raises unhandled `ZeroDivisionError: division by zero`.
+- Added unit tests `test_jaccard_same`, `test_jaccard_empty`, `test_jaccard_asymmetric_empty`, `test_jaccard_cat_hat`, `test_jaccard_as_set`.
+- Integrated `"jaccard"` string handler with `qval` and `as_set` JSON parameters into `src/main.rs`.
+- Fuzzed 10,000 iterations over persistent IPC with **0 mismatches in 8.89s**.
+
+---
+
+### Step 7: `Overlap` Similarity Metric ([`src/overlap.rs`](file:///c:/Projects/Post_Mortem/textdistancerust/src/overlap.rs))
+- **Status**: Completed & Verified (10,000 / 10,000 iterations passed, 0 mismatches)
+- **Date**: August 2, 2026
+
+#### Detailed Technical Summary:
+- Implemented `Overlap` struct conforming to `SimilarityMetric<T>`.
+- Computes overlap coefficient formula $\frac{|A \cap B|}{\min(|A|, |B|)}$ for multiset (`as_set = false`) and set (`as_set = true`) intersections.
+- Supports configurable tokenization (`qval = 1` scalar chars, `qval > 1` $q$-grams, `qval = 0` whitespace words).
+- Handles `min_count == 0` safely in Rust (`min_count == 0` $\rightarrow$ `similarity = 0.0`), protecting against division by zero when short input tokens yield zero-length n-gram slices.
+- Added unit tests `test_overlap_same`, `test_overlap_empty`, `test_overlap_asymmetric_empty`, `test_overlap_cat_hat`.
+- Integrated `"overlap"` string handler with `qval` and `as_set` JSON parameters into `src/main.rs`.
+- Fuzzed 10,000 iterations over persistent IPC with **0 mismatches in 9.78s**.
+
+---
+
+### Step 8: `Cosine` Similarity Metric ([`src/cosine.rs`](file:///c:/Projects/Post_Mortem/textdistancerust/src/cosine.rs))
+- **Status**: Completed & Verified (10,000 / 10,000 iterations passed, 0 mismatches)
+- **Date**: August 2, 2026
+
+#### Detailed Technical Summary:
+- Implemented `Cosine` struct conforming to `SimilarityMetric<T>`.
+- Computes Cosine similarity (Ochiai coefficient) formula $\frac{|A \cap B|}{\sqrt{|A| \times |B|}}$ for multiset (`as_set = false`) and set (`as_set = true`) intersections.
+- Supports configurable tokenization (`qval = 1` scalar chars, `qval > 1` $q$-grams, `qval = 0` whitespace words).
+- Handles `prod == 0.0` safely in Rust (`prod == 0.0` $\rightarrow$ `similarity = 0.0`), protecting against division by zero when short input tokens yield zero-length n-gram slices.
+- Documented upstream Python bug where `textdistance.Cosine(qval=2)('0', '1')` raises unhandled `ZeroDivisionError: division by zero`.
+- Added unit tests `test_cosine_same`, `test_cosine_empty`, `test_cosine_asymmetric_empty`, `test_cosine_cat_hat`.
+- Integrated `"cosine"` string handler with `qval` and `as_set` JSON parameters into `src/main.rs`.
+- Fuzzed 10,000 iterations over persistent IPC with **0 mismatches in 9.20s**.
+
+---
+
+### Step 9: `Tanimoto` Similarity Metric ([`src/tanimoto.rs`](file:///c:/Projects/Post_Mortem/textdistancerust/src/tanimoto.rs))
+- **Status**: Completed & Verified (10,000 / 10,000 iterations passed, 0 mismatches)
+- **Date**: August 2, 2026
+
+#### Detailed Technical Summary:
+- Implemented `Tanimoto` struct conforming to `SimilarityMetric<T>`.
+- Computes Tanimoto similarity as $\log_2(\text{Jaccard}(s1, s2))$ over multiset (`as_set = false`) and set (`as_set = true`) token collections.
+- Evaluates raw identity (`req.s1 == req.s2`) first, returning `0.0` for identical inputs (e.g. `("", "")`), since $\log_2(1.0) = 0.0$.
+- Returns `f64::NEG_INFINITY` (`-inf`) when Jaccard similarity is `0.0` (disjoint inputs or short input $q$-gram tokenization limits).
+- Handled `serde_json` `null` serialization for IEEE 754 infinity values in the Python fuzzing harness (`fuzz_driver.py`).
+- Added unit tests `test_tanimoto_same`, `test_tanimoto_empty`, `test_tanimoto_disjoint`, `test_tanimoto_cat_hat`.
+- Integrated `"tanimoto"` string handler with `qval` and `as_set` JSON parameters into `src/main.rs`.
+- Fuzzed 10,000 iterations over persistent IPC with **0 mismatches in 9.71s**.
+
+---
+
+### Step 10: `Sorensen` Similarity Metric ([`src/sorensen.rs`](file:///c:/Projects/Post_Mortem/textdistancerust/src/sorensen.rs))
+- **Status**: Completed & Verified (10,000 / 10,000 iterations passed, 0 mismatches)
+- **Date**: August 2, 2026
+
+#### Detailed Technical Summary:
+- Implemented `Sorensen` struct conforming to `SimilarityMetric<T>`.
+- Computes Sorensen-Dice coefficient formula $\frac{2 \times |A \cap B|}{|A| + |B|}$ for multiset (`as_set = false`) and set (`as_set = true`) intersections.
+- Supports configurable tokenization (`qval = 1` scalar chars, `qval > 1` $q$-grams, `qval = 0` whitespace words).
+- Handles `total_count == 0` safely in Rust (`total_count == 0` $\rightarrow$ `similarity = 0.0`), protecting against division by zero when short input tokens yield zero-length n-gram slices.
+- Documented upstream Python bug where `textdistance.Sorensen(qval=2)('0', '1')` raises unhandled `ZeroDivisionError: division by zero`.
+- Added unit tests `test_sorensen_same`, `test_sorensen_empty`, `test_sorensen_asymmetric_empty`, `test_sorensen_cat_hat`.
+- Integrated `"sorensen"` string handler with `qval` and `as_set` JSON parameters into `src/main.rs`.
+- Fuzzed 10,000 iterations over persistent IPC with **0 mismatches in 8.91s**.
+
+---
+
+### Step 11: `Tversky` Similarity Metric ([`src/tversky.rs`](file:///c:/Projects/Post_Mortem/textdistancerust/src/tversky.rs))
+- **Status**: Completed & Verified (10,000 / 10,000 iterations passed, 0 mismatches)
+- **Date**: August 2, 2026
+
+#### Detailed Technical Summary:
+- Implemented `Tversky` struct conforming to `SimilarityMetric<T>`.
+- Computes generalized Tversky index $\frac{|A \cap B| + \text{bias}}{|A \cap B| + \text{bias} + \alpha(|A \setminus B|) + \beta(|B \setminus A|)}$ for multiset (`as_set = false`) and set (`as_set = true`) token collections.
+- Supports configurable asymmetry weights $\alpha$ (default `1.0`), $\beta$ (default `1.0`), and optional additive `bias` (`Option<f64>`).
+- Modeled dual empty-token branch (unbiased $0.0$ fallback vs biased ratio evaluation yielding $1.0$), matching Python reference behavior.
+- Added unit tests `test_tversky_default_jaccard_parity`, `test_tversky_dice_parity`, `test_tversky_bias`.
+- Integrated `"tversky"` string handler with `alpha`, `beta`, `bias`, `qval`, and `as_set` JSON parameters into `src/main.rs`.
+- Fuzzed 10,000 iterations over persistent IPC with **0 mismatches in 15.00s** (randomizing $\alpha, \beta \in [0.1, 5.0]$, $\text{bias} \in [\text{None}, 0.0, 2.0]$, $q\text{val} \in [1, 3]$, and `as_set`).
 
 ---
 
@@ -146,14 +241,14 @@
 | **Step 2** | `Length` | Low | `dist=0.0, max=0, norm_dist=0.0` | 10,000 | **DONE** |
 | **Step 3** | `Prefix` | Low | `sim=0, max=0, norm_sim=1.0` | 10,000 | **DONE** |
 | **Step 4** | `Postfix` | Low | `sim=0, max=0, norm_sim=1.0` | 10,000 | **DONE** |
-| **Step 5** | `Matrix` | Low-Med | `sim=match_cost (1.0), norm_sim=1.0` | 10,000 | *IN PROGRESS* |
-| **Step 6** | `Jaccard` | Med | `sim=1.0, norm_sim=1.0` (via quick_answer) | 10,000 | Pending |   
-| **Step 7** | `Overlap` | Med | `sim=1.0, norm_sim=1.0` | 10,000 | Pending |
-| **Step 8** | `Cosine` | Med | `sim=1.0, norm_sim=1.0` | 10,000 | Pending |
-| **Step 9** | `Tanimoto` | Med | `sim=0.0` for `("", "")`; `-inf` for disjoint | 10,000 | Pending |
-| **Step 10** | `Sorensen` | Med | `sim=1.0, norm_sim=1.0` | 10,000 | Pending |
-| **Step 11** | `Tversky` | Med-High | `sim=1.0, norm_sim=1.0` | 10,000 | Pending |
-| **Step 12** | `Bag` | Med | `dist=0.0, norm_dist=0.0` | 10,000 | Pending |
+| **Step 5** | `Matrix` | Low-Med | `sim=match_cost (1.0), norm_sim=1.0` | 10,000 | **DONE** |
+| **Step 6** | `Jaccard` | Med | `sim=1.0, norm_sim=1.0` (via quick_answer) | 10,000 | **DONE** |
+| **Step 7** | `Overlap` | Med | `sim=1.0, norm_sim=1.0` | 10,000 | **DONE** |
+| **Step 8** | `Cosine` | Med | `sim=1.0, norm_sim=1.0` | 10,000 | **DONE** |
+| **Step 9** | `Tanimoto` | Med | `sim=0.0` for `("", "")`; `-inf` for disjoint | 10,000 | **DONE** |
+| **Step 10** | `Sorensen` | Med | `sim=1.0, norm_sim=1.0` | 10,000 | **DONE** |
+| **Step 11** | `Tversky` | Med-High | `sim=1.0, norm_sim=1.0` | 10,000 | **DONE** |
+| **Step 12** | `Bag` | Med | `dist=0.0, norm_dist=0.0` | 10,000 | *IN PROGRESS* |
 | **Step 13** | `MRA` | Med-High | `sim=0, max=0, norm_sim=1.0` | 10,000 | Pending |
 | **Step 14** | `StrCmp95` | High | `sim=1.0, norm_sim=1.0` | 10,000 | Pending |
 | **Step 15** | `Editex` | High | `dist=0.0, norm_dist=0.0` | 10,000 | Pending |

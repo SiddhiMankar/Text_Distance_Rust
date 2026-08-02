@@ -9,6 +9,11 @@ struct FuzzRequest {
     s1: String,
     s2: String,
     mat: Option<Vec<(String, String, f64)>>,
+    qval: Option<usize>,
+    as_set: Option<bool>,
+    alpha: Option<f64>,
+    beta: Option<f64>,
+    bias: Option<f64>,
 }
 
 #[derive(Serialize)]
@@ -105,7 +110,7 @@ fn process_request(req: &FuzzRequest) -> FuzzResponse {
                     similarity: Some(sim),
                     distance: Some(dist),
                     normalized_similarity: Some(norm_sim),
-                    normalized_distance: Some(norm_dist),
+                    normalized_distance: Some(norm_sim),
                     subsequence: None,
                     error: None,
                 },
@@ -212,6 +217,639 @@ fn process_request(req: &FuzzRequest) -> FuzzResponse {
                     mat_metric.distance(&s1_chars, &s2_chars),
                     mat_metric.normalized_similarity(&s1_chars, &s2_chars),
                     mat_metric.normalized_distance(&s1_chars, &s2_chars),
+                ) {
+                    (Ok(sim), Ok(dist), Ok(norm_sim), Ok(norm_dist)) => FuzzResponse {
+                        similarity: Some(sim),
+                        distance: Some(dist),
+                        normalized_similarity: Some(norm_sim),
+                        normalized_distance: Some(norm_dist),
+                        subsequence: None,
+                        error: None,
+                    },
+                    _ => FuzzResponse {
+                        similarity: None,
+                        distance: None,
+                        normalized_similarity: None,
+                        normalized_distance: None,
+                        subsequence: None,
+                        error: Some("Calculation failed".to_string()),
+                    },
+                }
+            }
+        }
+        "jaccard" => {
+            let qval = req.qval.unwrap_or(1);
+            let as_set = req.as_set.unwrap_or(false);
+            let jaccard_metric = Jaccard::with_config(qval, as_set);
+
+            if req.s1 == req.s2 {
+                return FuzzResponse {
+                    similarity: Some(1.0),
+                    distance: Some(0.0),
+                    normalized_similarity: Some(1.0),
+                    normalized_distance: Some(0.0),
+                    subsequence: None,
+                    error: None,
+                };
+            }
+
+            if req.s1.is_empty() || req.s2.is_empty() {
+                return FuzzResponse {
+                    similarity: Some(0.0),
+                    distance: Some(1.0),
+                    normalized_similarity: Some(0.0),
+                    normalized_distance: Some(1.0),
+                    subsequence: None,
+                    error: None,
+                };
+            }
+
+            if qval == 0 {
+                let s1_words = to_word_vec(&req.s1);
+                let s2_words = to_word_vec(&req.s2);
+                match (
+                    jaccard_metric.similarity(&s1_words, &s2_words),
+                    jaccard_metric.distance(&s1_words, &s2_words),
+                    jaccard_metric.normalized_similarity(&s1_words, &s2_words),
+                    jaccard_metric.normalized_distance(&s1_words, &s2_words),
+                ) {
+                    (Ok(sim), Ok(dist), Ok(norm_sim), Ok(norm_dist)) => FuzzResponse {
+                        similarity: Some(sim),
+                        distance: Some(dist),
+                        normalized_similarity: Some(norm_sim),
+                        normalized_distance: Some(norm_dist),
+                        subsequence: None,
+                        error: None,
+                    },
+                    _ => FuzzResponse {
+                        similarity: None,
+                        distance: None,
+                        normalized_similarity: None,
+                        normalized_distance: None,
+                        subsequence: None,
+                        error: Some("Calculation failed".to_string()),
+                    },
+                }
+            } else if qval > 1 {
+                let s1_ngrams = find_ngrams(&s1_chars, qval);
+                let s2_ngrams = find_ngrams(&s2_chars, qval);
+                match (
+                    jaccard_metric.similarity(&s1_ngrams, &s2_ngrams),
+                    jaccard_metric.distance(&s1_ngrams, &s2_ngrams),
+                    jaccard_metric.normalized_similarity(&s1_ngrams, &s2_ngrams),
+                    jaccard_metric.normalized_distance(&s1_ngrams, &s2_ngrams),
+                ) {
+                    (Ok(sim), Ok(dist), Ok(norm_sim), Ok(norm_dist)) => FuzzResponse {
+                        similarity: Some(sim),
+                        distance: Some(dist),
+                        normalized_similarity: Some(norm_sim),
+                        normalized_distance: Some(norm_dist),
+                        subsequence: None,
+                        error: None,
+                    },
+                    _ => FuzzResponse {
+                        similarity: None,
+                        distance: None,
+                        normalized_similarity: None,
+                        normalized_distance: None,
+                        subsequence: None,
+                        error: Some("Calculation failed".to_string()),
+                    },
+                }
+            } else {
+                match (
+                    jaccard_metric.similarity(&s1_chars, &s2_chars),
+                    jaccard_metric.distance(&s1_chars, &s2_chars),
+                    jaccard_metric.normalized_similarity(&s1_chars, &s2_chars),
+                    jaccard_metric.normalized_distance(&s1_chars, &s2_chars),
+                ) {
+                    (Ok(sim), Ok(dist), Ok(norm_sim), Ok(norm_dist)) => FuzzResponse {
+                        similarity: Some(sim),
+                        distance: Some(dist),
+                        normalized_similarity: Some(norm_sim),
+                        normalized_distance: Some(norm_dist),
+                        subsequence: None,
+                        error: None,
+                    },
+                    _ => FuzzResponse {
+                        similarity: None,
+                        distance: None,
+                        normalized_similarity: None,
+                        normalized_distance: None,
+                        subsequence: None,
+                        error: Some("Calculation failed".to_string()),
+                    },
+                }
+            }
+        }
+        "overlap" => {
+            let qval = req.qval.unwrap_or(1);
+            let as_set = req.as_set.unwrap_or(false);
+            let overlap_metric = Overlap::with_config(qval, as_set);
+
+            if req.s1 == req.s2 {
+                return FuzzResponse {
+                    similarity: Some(1.0),
+                    distance: Some(0.0),
+                    normalized_similarity: Some(1.0),
+                    normalized_distance: Some(0.0),
+                    subsequence: None,
+                    error: None,
+                };
+            }
+
+            if req.s1.is_empty() || req.s2.is_empty() {
+                return FuzzResponse {
+                    similarity: Some(0.0),
+                    distance: Some(1.0),
+                    normalized_similarity: Some(0.0),
+                    normalized_distance: Some(1.0),
+                    subsequence: None,
+                    error: None,
+                };
+            }
+
+            if qval == 0 {
+                let s1_words = to_word_vec(&req.s1);
+                let s2_words = to_word_vec(&req.s2);
+                match (
+                    overlap_metric.similarity(&s1_words, &s2_words),
+                    overlap_metric.distance(&s1_words, &s2_words),
+                    overlap_metric.normalized_similarity(&s1_words, &s2_words),
+                    overlap_metric.normalized_distance(&s1_words, &s2_words),
+                ) {
+                    (Ok(sim), Ok(dist), Ok(norm_sim), Ok(norm_dist)) => FuzzResponse {
+                        similarity: Some(sim),
+                        distance: Some(dist),
+                        normalized_similarity: Some(norm_sim),
+                        normalized_distance: Some(norm_dist),
+                        subsequence: None,
+                        error: None,
+                    },
+                    _ => FuzzResponse {
+                        similarity: None,
+                        distance: None,
+                        normalized_similarity: None,
+                        normalized_distance: None,
+                        subsequence: None,
+                        error: Some("Calculation failed".to_string()),
+                    },
+                }
+            } else if qval > 1 {
+                let s1_ngrams = find_ngrams(&s1_chars, qval);
+                let s2_ngrams = find_ngrams(&s2_chars, qval);
+                match (
+                    overlap_metric.similarity(&s1_ngrams, &s2_ngrams),
+                    overlap_metric.distance(&s1_ngrams, &s2_ngrams),
+                    overlap_metric.normalized_similarity(&s1_ngrams, &s2_ngrams),
+                    overlap_metric.normalized_distance(&s1_ngrams, &s2_ngrams),
+                ) {
+                    (Ok(sim), Ok(dist), Ok(norm_sim), Ok(norm_dist)) => FuzzResponse {
+                        similarity: Some(sim),
+                        distance: Some(dist),
+                        normalized_similarity: Some(norm_sim),
+                        normalized_distance: Some(norm_dist),
+                        subsequence: None,
+                        error: None,
+                    },
+                    _ => FuzzResponse {
+                        similarity: None,
+                        distance: None,
+                        normalized_similarity: None,
+                        normalized_distance: None,
+                        subsequence: None,
+                        error: Some("Calculation failed".to_string()),
+                    },
+                }
+            } else {
+                match (
+                    overlap_metric.similarity(&s1_chars, &s2_chars),
+                    overlap_metric.distance(&s1_chars, &s2_chars),
+                    overlap_metric.normalized_similarity(&s1_chars, &s2_chars),
+                    overlap_metric.normalized_distance(&s1_chars, &s2_chars),
+                ) {
+                    (Ok(sim), Ok(dist), Ok(norm_sim), Ok(norm_dist)) => FuzzResponse {
+                        similarity: Some(sim),
+                        distance: Some(dist),
+                        normalized_similarity: Some(norm_sim),
+                        normalized_distance: Some(norm_dist),
+                        subsequence: None,
+                        error: None,
+                    },
+                    _ => FuzzResponse {
+                        similarity: None,
+                        distance: None,
+                        normalized_similarity: None,
+                        normalized_distance: None,
+                        subsequence: None,
+                        error: Some("Calculation failed".to_string()),
+                    },
+                }
+            }
+        }
+        "cosine" => {
+            let qval = req.qval.unwrap_or(1);
+            let as_set = req.as_set.unwrap_or(false);
+            let cosine_metric = Cosine::with_config(qval, as_set);
+
+            if req.s1 == req.s2 {
+                return FuzzResponse {
+                    similarity: Some(1.0),
+                    distance: Some(0.0),
+                    normalized_similarity: Some(1.0),
+                    normalized_distance: Some(0.0),
+                    subsequence: None,
+                    error: None,
+                };
+            }
+
+            if req.s1.is_empty() || req.s2.is_empty() {
+                return FuzzResponse {
+                    similarity: Some(0.0),
+                    distance: Some(1.0),
+                    normalized_similarity: Some(0.0),
+                    normalized_distance: Some(1.0),
+                    subsequence: None,
+                    error: None,
+                };
+            }
+
+            if qval == 0 {
+                let s1_words = to_word_vec(&req.s1);
+                let s2_words = to_word_vec(&req.s2);
+                match (
+                    cosine_metric.similarity(&s1_words, &s2_words),
+                    cosine_metric.distance(&s1_words, &s2_words),
+                    cosine_metric.normalized_similarity(&s1_words, &s2_words),
+                    cosine_metric.normalized_distance(&s1_words, &s2_words),
+                ) {
+                    (Ok(sim), Ok(dist), Ok(norm_sim), Ok(norm_dist)) => FuzzResponse {
+                        similarity: Some(sim),
+                        distance: Some(dist),
+                        normalized_similarity: Some(norm_sim),
+                        normalized_distance: Some(norm_dist),
+                        subsequence: None,
+                        error: None,
+                    },
+                    _ => FuzzResponse {
+                        similarity: None,
+                        distance: None,
+                        normalized_similarity: None,
+                        normalized_distance: None,
+                        subsequence: None,
+                        error: Some("Calculation failed".to_string()),
+                    },
+                }
+            } else if qval > 1 {
+                let s1_ngrams = find_ngrams(&s1_chars, qval);
+                let s2_ngrams = find_ngrams(&s2_chars, qval);
+                match (
+                    cosine_metric.similarity(&s1_ngrams, &s2_ngrams),
+                    cosine_metric.distance(&s1_ngrams, &s2_ngrams),
+                    cosine_metric.normalized_similarity(&s1_ngrams, &s2_ngrams),
+                    cosine_metric.normalized_distance(&s1_ngrams, &s2_ngrams),
+                ) {
+                    (Ok(sim), Ok(dist), Ok(norm_sim), Ok(norm_dist)) => FuzzResponse {
+                        similarity: Some(sim),
+                        distance: Some(dist),
+                        normalized_similarity: Some(norm_sim),
+                        normalized_distance: Some(norm_dist),
+                        subsequence: None,
+                        error: None,
+                    },
+                    _ => FuzzResponse {
+                        similarity: None,
+                        distance: None,
+                        normalized_similarity: None,
+                        normalized_distance: None,
+                        subsequence: None,
+                        error: Some("Calculation failed".to_string()),
+                    },
+                }
+            } else {
+                match (
+                    cosine_metric.similarity(&s1_chars, &s2_chars),
+                    cosine_metric.distance(&s1_chars, &s2_chars),
+                    cosine_metric.normalized_similarity(&s1_chars, &s2_chars),
+                    cosine_metric.normalized_distance(&s1_chars, &s2_chars),
+                ) {
+                    (Ok(sim), Ok(dist), Ok(norm_sim), Ok(norm_dist)) => FuzzResponse {
+                        similarity: Some(sim),
+                        distance: Some(dist),
+                        normalized_similarity: Some(norm_sim),
+                        normalized_distance: Some(norm_dist),
+                        subsequence: None,
+                        error: None,
+                    },
+                    _ => FuzzResponse {
+                        similarity: None,
+                        distance: None,
+                        normalized_similarity: None,
+                        normalized_distance: None,
+                        subsequence: None,
+                        error: Some("Calculation failed".to_string()),
+                    },
+                }
+            }
+        }
+        "tanimoto" => {
+            let qval = req.qval.unwrap_or(1);
+            let as_set = req.as_set.unwrap_or(false);
+            let tanimoto_metric = Tanimoto::with_config(qval, as_set);
+
+            if req.s1 == req.s2 {
+                return FuzzResponse {
+                    similarity: Some(0.0),
+                    distance: Some(1.0),
+                    normalized_similarity: Some(0.0),
+                    normalized_distance: Some(1.0),
+                    subsequence: None,
+                    error: None,
+                };
+            }
+
+            if req.s1.is_empty() || req.s2.is_empty() {
+                return FuzzResponse {
+                    similarity: Some(f64::NEG_INFINITY),
+                    distance: Some(f64::INFINITY),
+                    normalized_similarity: Some(f64::NEG_INFINITY),
+                    normalized_distance: Some(f64::INFINITY),
+                    subsequence: None,
+                    error: None,
+                };
+            }
+
+            if qval == 0 {
+                let s1_words = to_word_vec(&req.s1);
+                let s2_words = to_word_vec(&req.s2);
+                match (
+                    tanimoto_metric.similarity(&s1_words, &s2_words),
+                    tanimoto_metric.distance(&s1_words, &s2_words),
+                    tanimoto_metric.normalized_similarity(&s1_words, &s2_words),
+                    tanimoto_metric.normalized_distance(&s1_words, &s2_words),
+                ) {
+                    (Ok(sim), Ok(dist), Ok(norm_sim), Ok(norm_dist)) => FuzzResponse {
+                        similarity: Some(sim),
+                        distance: Some(dist),
+                        normalized_similarity: Some(norm_sim),
+                        normalized_distance: Some(norm_dist),
+                        subsequence: None,
+                        error: None,
+                    },
+                    _ => FuzzResponse {
+                        similarity: None,
+                        distance: None,
+                        normalized_similarity: None,
+                        normalized_distance: None,
+                        subsequence: None,
+                        error: Some("Calculation failed".to_string()),
+                    },
+                }
+            } else if qval > 1 {
+                let s1_ngrams = find_ngrams(&s1_chars, qval);
+                let s2_ngrams = find_ngrams(&s2_chars, qval);
+                match (
+                    tanimoto_metric.similarity(&s1_ngrams, &s2_ngrams),
+                    tanimoto_metric.distance(&s1_ngrams, &s2_ngrams),
+                    tanimoto_metric.normalized_similarity(&s1_ngrams, &s2_ngrams),
+                    tanimoto_metric.normalized_distance(&s1_ngrams, &s2_ngrams),
+                ) {
+                    (Ok(sim), Ok(dist), Ok(norm_sim), Ok(norm_dist)) => FuzzResponse {
+                        similarity: Some(sim),
+                        distance: Some(dist),
+                        normalized_similarity: Some(norm_sim),
+                        normalized_distance: Some(norm_dist),
+                        subsequence: None,
+                        error: None,
+                    },
+                    _ => FuzzResponse {
+                        similarity: None,
+                        distance: None,
+                        normalized_similarity: None,
+                        normalized_distance: None,
+                        subsequence: None,
+                        error: Some("Calculation failed".to_string()),
+                    },
+                }
+            } else {
+                match (
+                    tanimoto_metric.similarity(&s1_chars, &s2_chars),
+                    tanimoto_metric.distance(&s1_chars, &s2_chars),
+                    tanimoto_metric.normalized_similarity(&s1_chars, &s2_chars),
+                    tanimoto_metric.normalized_distance(&s1_chars, &s2_chars),
+                ) {
+                    (Ok(sim), Ok(dist), Ok(norm_sim), Ok(norm_dist)) => FuzzResponse {
+                        similarity: Some(sim),
+                        distance: Some(dist),
+                        normalized_similarity: Some(norm_sim),
+                        normalized_distance: Some(norm_dist),
+                        subsequence: None,
+                        error: None,
+                    },
+                    _ => FuzzResponse {
+                        similarity: None,
+                        distance: None,
+                        normalized_similarity: None,
+                        normalized_distance: None,
+                        subsequence: None,
+                        error: Some("Calculation failed".to_string()),
+                    },
+                }
+            }
+        }
+        "sorensen" => {
+            let qval = req.qval.unwrap_or(1);
+            let as_set = req.as_set.unwrap_or(false);
+            let sorensen_metric = Sorensen::with_config(qval, as_set);
+
+            if req.s1 == req.s2 {
+                return FuzzResponse {
+                    similarity: Some(1.0),
+                    distance: Some(0.0),
+                    normalized_similarity: Some(1.0),
+                    normalized_distance: Some(0.0),
+                    subsequence: None,
+                    error: None,
+                };
+            }
+
+            if req.s1.is_empty() || req.s2.is_empty() {
+                return FuzzResponse {
+                    similarity: Some(0.0),
+                    distance: Some(1.0),
+                    normalized_similarity: Some(0.0),
+                    normalized_distance: Some(1.0),
+                    subsequence: None,
+                    error: None,
+                };
+            }
+
+            if qval == 0 {
+                let s1_words = to_word_vec(&req.s1);
+                let s2_words = to_word_vec(&req.s2);
+                match (
+                    sorensen_metric.similarity(&s1_words, &s2_words),
+                    sorensen_metric.distance(&s1_words, &s2_words),
+                    sorensen_metric.normalized_similarity(&s1_words, &s2_words),
+                    sorensen_metric.normalized_distance(&s1_words, &s2_words),
+                ) {
+                    (Ok(sim), Ok(dist), Ok(norm_sim), Ok(norm_dist)) => FuzzResponse {
+                        similarity: Some(sim),
+                        distance: Some(dist),
+                        normalized_similarity: Some(norm_sim),
+                        normalized_distance: Some(norm_dist),
+                        subsequence: None,
+                        error: None,
+                    },
+                    _ => FuzzResponse {
+                        similarity: None,
+                        distance: None,
+                        normalized_similarity: None,
+                        normalized_distance: None,
+                        subsequence: None,
+                        error: Some("Calculation failed".to_string()),
+                    },
+                }
+            } else if qval > 1 {
+                let s1_ngrams = find_ngrams(&s1_chars, qval);
+                let s2_ngrams = find_ngrams(&s2_chars, qval);
+                match (
+                    sorensen_metric.similarity(&s1_ngrams, &s2_ngrams),
+                    sorensen_metric.distance(&s1_ngrams, &s2_ngrams),
+                    sorensen_metric.normalized_similarity(&s1_ngrams, &s2_ngrams),
+                    sorensen_metric.normalized_distance(&s1_ngrams, &s2_ngrams),
+                ) {
+                    (Ok(sim), Ok(dist), Ok(norm_sim), Ok(norm_dist)) => FuzzResponse {
+                        similarity: Some(sim),
+                        distance: Some(dist),
+                        normalized_similarity: Some(norm_sim),
+                        normalized_distance: Some(norm_dist),
+                        subsequence: None,
+                        error: None,
+                    },
+                    _ => FuzzResponse {
+                        similarity: None,
+                        distance: None,
+                        normalized_similarity: None,
+                        normalized_distance: None,
+                        subsequence: None,
+                        error: Some("Calculation failed".to_string()),
+                    },
+                }
+            } else {
+                match (
+                    sorensen_metric.similarity(&s1_chars, &s2_chars),
+                    sorensen_metric.distance(&s1_chars, &s2_chars),
+                    sorensen_metric.normalized_similarity(&s1_chars, &s2_chars),
+                    sorensen_metric.normalized_distance(&s1_chars, &s2_chars),
+                ) {
+                    (Ok(sim), Ok(dist), Ok(norm_sim), Ok(norm_dist)) => FuzzResponse {
+                        similarity: Some(sim),
+                        distance: Some(dist),
+                        normalized_similarity: Some(norm_sim),
+                        normalized_distance: Some(norm_dist),
+                        subsequence: None,
+                        error: None,
+                    },
+                    _ => FuzzResponse {
+                        similarity: None,
+                        distance: None,
+                        normalized_similarity: None,
+                        normalized_distance: None,
+                        subsequence: None,
+                        error: Some("Calculation failed".to_string()),
+                    },
+                }
+            }
+        }
+        "tversky" => {
+            let alpha = req.alpha.unwrap_or(1.0);
+            let beta = req.beta.unwrap_or(1.0);
+            let bias = req.bias;
+            let qval = req.qval.unwrap_or(1);
+            let as_set = req.as_set.unwrap_or(false);
+            let tversky_metric = Tversky::with_config(alpha, beta, bias, qval, as_set);
+
+            if req.s1 == req.s2 {
+                return FuzzResponse {
+                    similarity: Some(1.0),
+                    distance: Some(0.0),
+                    normalized_similarity: Some(1.0),
+                    normalized_distance: Some(0.0),
+                    subsequence: None,
+                    error: None,
+                };
+            }
+
+            if req.s1.is_empty() || req.s2.is_empty() {
+                return FuzzResponse {
+                    similarity: Some(0.0),
+                    distance: Some(1.0),
+                    normalized_similarity: Some(0.0),
+                    normalized_distance: Some(1.0),
+                    subsequence: None,
+                    error: None,
+                };
+            }
+
+            if qval == 0 {
+                let s1_words = to_word_vec(&req.s1);
+                let s2_words = to_word_vec(&req.s2);
+                match (
+                    tversky_metric.similarity(&s1_words, &s2_words),
+                    tversky_metric.distance(&s1_words, &s2_words),
+                    tversky_metric.normalized_similarity(&s1_words, &s2_words),
+                    tversky_metric.normalized_distance(&s1_words, &s2_words),
+                ) {
+                    (Ok(sim), Ok(dist), Ok(norm_sim), Ok(norm_dist)) => FuzzResponse {
+                        similarity: Some(sim),
+                        distance: Some(dist),
+                        normalized_similarity: Some(norm_sim),
+                        normalized_distance: Some(norm_dist),
+                        subsequence: None,
+                        error: None,
+                    },
+                    _ => FuzzResponse {
+                        similarity: None,
+                        distance: None,
+                        normalized_similarity: None,
+                        normalized_distance: None,
+                        subsequence: None,
+                        error: Some("Calculation failed".to_string()),
+                    },
+                }
+            } else if qval > 1 {
+                let s1_ngrams = find_ngrams(&s1_chars, qval);
+                let s2_ngrams = find_ngrams(&s2_chars, qval);
+                match (
+                    tversky_metric.similarity(&s1_ngrams, &s2_ngrams),
+                    tversky_metric.distance(&s1_ngrams, &s2_ngrams),
+                    tversky_metric.normalized_similarity(&s1_ngrams, &s2_ngrams),
+                    tversky_metric.normalized_distance(&s1_ngrams, &s2_ngrams),
+                ) {
+                    (Ok(sim), Ok(dist), Ok(norm_sim), Ok(norm_dist)) => FuzzResponse {
+                        similarity: Some(sim),
+                        distance: Some(dist),
+                        normalized_similarity: Some(norm_sim),
+                        normalized_distance: Some(norm_dist),
+                        subsequence: None,
+                        error: None,
+                    },
+                    _ => FuzzResponse {
+                        similarity: None,
+                        distance: None,
+                        normalized_similarity: None,
+                        normalized_distance: None,
+                        subsequence: None,
+                        error: Some("Calculation failed".to_string()),
+                    },
+                }
+            } else {
+                match (
+                    tversky_metric.similarity(&s1_chars, &s2_chars),
+                    tversky_metric.distance(&s1_chars, &s2_chars),
+                    tversky_metric.normalized_similarity(&s1_chars, &s2_chars),
+                    tversky_metric.normalized_distance(&s1_chars, &s2_chars),
                 ) {
                     (Ok(sim), Ok(dist), Ok(norm_sim), Ok(norm_dist)) => FuzzResponse {
                         similarity: Some(sim),

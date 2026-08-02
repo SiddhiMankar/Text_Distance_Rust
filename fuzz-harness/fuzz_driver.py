@@ -29,10 +29,20 @@ class RustProcess:
             bufsize=1,
         )
 
-    def query(self, alg: str, s1: str, s2: str, mat=None) -> dict:
+    def query(self, alg: str, s1: str, s2: str, mat=None, qval=None, as_set=None, alpha=None, beta=None, bias=None) -> dict:
         payload = {"alg": alg, "s1": s1, "s2": s2}
-        if mat is not None:
+        if mat is not None: 
             payload["mat"] = mat
+        if qval is not None:
+            payload["qval"] = qval
+        if as_set is not None:
+            payload["as_set"] = as_set
+        if alpha is not None:
+            payload["alpha"] = alpha
+        if beta is not None:
+            payload["beta"] = beta
+        if bias is not None:
+            payload["bias"] = bias
         req = json.dumps(payload)
         self.proc.stdin.write(req + '\n')
         self.proc.stdin.flush()
@@ -64,7 +74,6 @@ def run_seed_tests(rust_proc: RustProcess, alg_name: str):
         verify_pair(rust_proc, alg_name, s1, s2)
 
     if alg_name == "matrix":
-        # Additional custom matrix seed cases
         mat_cases = [
             ("cat", "bat", [["cat", "bat", 0.5]]),
             ("bat", "cat", [["cat", "bat", 0.5]]),
@@ -74,20 +83,50 @@ def run_seed_tests(rust_proc: RustProcess, alg_name: str):
         for s1, s2, mat in mat_cases:
             verify_pair(rust_proc, alg_name, s1, s2, mat=mat)
 
+    if alg_name in ("jaccard", "overlap", "cosine", "tanimoto", "sorensen", "tversky"):
+        token_cases = [
+            ("cat", "hat", 1, False),
+            ("aa", "a", 1, False),
+            ("aa", "a", 1, True),
+            ("hello", "help", 2, False),
+            ("0", "1", 2, False),
+            ("0", "1", 2, True),
+        ]
+        for s1, s2, qval, as_set in token_cases:
+            verify_pair(rust_proc, alg_name, s1, s2, qval=qval, as_set=as_set)
+
     print(f"Seed corpus tests passed for '{alg_name}'.")
 
 
-def verify_pair(rust_proc: RustProcess, alg_name: str, s1: str, s2: str, mat=None):
+def verify_pair(rust_proc: RustProcess, alg_name: str, s1: str, s2: str, mat=None, qval=None, as_set=None, alpha=None, beta=None, bias=None):
     if mat is not None:
         py_mat_dict = {(item[0], item[1]): item[2] for item in mat}
         py_alg = textdistance.Matrix(mat=py_mat_dict)
+    elif alg_name == "tversky":
+        kwargs = {}
+        if qval is not None:
+            kwargs["qval"] = qval
+        if as_set is not None:
+            kwargs["as_set"] = as_set
+        if alpha is not None and beta is not None:
+            kwargs["ks"] = (alpha, beta)
+        if bias is not None:
+            kwargs["bias"] = bias
+        py_alg = textdistance.Tversky(**kwargs)
+    elif alg_name in ("jaccard", "overlap", "cosine", "tanimoto", "sorensen") and (qval is not None or as_set is not None):
+        kwargs = {}
+        if qval is not None:
+            kwargs["qval"] = qval
+        if as_set is not None:
+            kwargs["as_set"] = as_set
+        cls = getattr(textdistance, alg_name.capitalize())
+        py_alg = cls(**kwargs)
     else:
         py_alg = getattr(textdistance, alg_name)
 
     if alg_name in ("prefix", "postfix"):
-        # Track 1: Verify literal substring output (__call__)
         py_subseq = py_alg(s1, s2)
-        rust_res = rust_proc.query(alg_name, s1, s2, mat=mat)
+        rust_res = rust_proc.query(alg_name, s1, s2, mat=mat, qval=qval, as_set=as_set, alpha=alpha, beta=beta, bias=bias)
         if rust_res.get("error"):
             raise ValueError(f"Rust error for {alg_name}({repr(s1)}, {repr(s2)}): {rust_res['error']}")
         
@@ -95,7 +134,6 @@ def verify_pair(rust_proc: RustProcess, alg_name: str, s1: str, s2: str, mat=Non
         if r_subseq is not None and r_subseq != py_subseq:
             raise AssertionError(f"Mismatch in {alg_name}.subsequence({repr(s1)}, {repr(s2)}): Py={repr(py_subseq)}, Rust={repr(r_subseq)}")
 
-        # Track 2: Verify derived numeric fields against Py similarity and distance
         py_sim = py_alg.similarity(s1, s2)
         py_dist = py_alg.distance(s1, s2)
         py_norm_sim = py_alg.normalized_similarity(s1, s2)
@@ -107,12 +145,32 @@ def verify_pair(rust_proc: RustProcess, alg_name: str, s1: str, s2: str, mat=Non
         check_close("normalized_distance", py_norm_dist, rust_res["normalized_distance"], alg_name, s1, s2)
         return
 
-    py_sim = py_alg.similarity(s1, s2)
-    py_dist = py_alg.distance(s1, s2)
-    py_norm_sim = py_alg.normalized_similarity(s1, s2)
-    py_norm_dist = py_alg.normalized_distance(s1, s2)
+    try:
+        py_sim = py_alg.similarity(s1, s2)
+        py_dist = py_alg.distance(s1, s2)
+        py_norm_sim = py_alg.normalized_similarity(s1, s2)
+        py_norm_dist = py_alg.normalized_distance(s1, s2)
+    except ZeroDivisionError:
+        # Documented Python bug in textdistance token-based algorithms:
+        # When qval > 1 and both inputs are shorter than qval (e.g. s1='0', s2='1', qval=2),
+        # Python evaluates division by zero (0 / 0), causing unhandled ZeroDivisionError.
+        # Rust handles this safely by returning sim=0.0 (or -inf for tanimoto), dist=1.0 (or inf for tanimoto).
+        rust_res = rust_proc.query(alg_name, s1, s2, mat=mat, qval=qval, as_set=as_set, alpha=alpha, beta=beta, bias=bias)
+        if rust_res.get("error"):
+            raise ValueError(f"Rust error for {alg_name}({repr(s1)}, {repr(s2)}): {rust_res['error']}")
+        if alg_name == "tanimoto":
+            check_close("similarity", float("-inf"), rust_res["similarity"], alg_name, s1, s2)
+            check_close("distance", float("inf"), rust_res["distance"], alg_name, s1, s2)
+            check_close("normalized_similarity", float("-inf"), rust_res["normalized_similarity"], alg_name, s1, s2)
+            check_close("normalized_distance", float("inf"), rust_res["normalized_distance"], alg_name, s1, s2)
+        else:
+            check_close("similarity", 0.0, rust_res["similarity"], alg_name, s1, s2)
+            check_close("distance", 1.0, rust_res["distance"], alg_name, s1, s2)
+            check_close("normalized_similarity", 0.0, rust_res["normalized_similarity"], alg_name, s1, s2)
+            check_close("normalized_distance", 1.0, rust_res["normalized_distance"], alg_name, s1, s2)
+        return
 
-    rust_res = rust_proc.query(alg_name, s1, s2, mat=mat)
+    rust_res = rust_proc.query(alg_name, s1, s2, mat=mat, qval=qval, as_set=as_set, alpha=alpha, beta=beta, bias=bias)
     if rust_res.get("error"):
         raise ValueError(f"Rust error for {alg_name}({repr(s1)}, {repr(s2)}): {rust_res['error']}")
 
@@ -129,13 +187,18 @@ def verify_pair(rust_proc: RustProcess, alg_name: str, s1: str, s2: str, mat=Non
 
 def check_close(name: str, py_val, rust_val, alg: str, s1: str, s2: str):
     if math.isinf(py_val):
+        # serde_json serializes f64::INFINITY / f64::NEG_INFINITY as null in JSON (represented as None in Python)
+        if rust_val is None:
+            return
         if math.isinf(rust_val) and (py_val > 0) == (rust_val > 0):
             return
         raise AssertionError(f"Mismatch in {alg}.{name}({repr(s1)}, {repr(s2)}): Py={py_val}, Rust={rust_val}")
     if math.isnan(py_val):
-        if math.isnan(rust_val):
+        if rust_val is None or math.isnan(rust_val):
             return
         raise AssertionError(f"Mismatch in {alg}.{name}({repr(s1)}, {repr(s2)}): Py={py_val}, Rust={rust_val}")
+    if rust_val is None:
+        raise AssertionError(f"Mismatch in {alg}.{name}({repr(s1)}, {repr(s2)}): Py={py_val}, Rust=None")
     if not math.isclose(py_val, rust_val, abs_tol=1e-9):
         raise AssertionError(f"Mismatch in {alg}.{name}({repr(s1)}, {repr(s2)}): Py={py_val}, Rust={rust_val}")
 
@@ -186,6 +249,33 @@ def main():
                 verify_pair(rust_proc, alg_name, s1, s2, mat=mat_param)
 
             fuzz_matrix()
+        elif alg_name == "tversky":
+            @hypothesis.settings(max_examples=args.iterations, deadline=None)
+            @hypothesis.given(
+                s1=st.text(),
+                s2=st.text(),
+                alpha=st.floats(min_value=0.1, max_value=5.0),
+                beta=st.floats(min_value=0.1, max_value=5.0),
+                bias=st.one_of(st.none(), st.floats(min_value=0.0, max_value=2.0)),
+                qval=st.integers(min_value=1, max_value=3),
+                as_set=st.booleans(),
+            )
+            def fuzz_tversky(s1, s2, alpha, beta, bias, qval, as_set):
+                verify_pair(rust_proc, alg_name, s1, s2, qval=qval, as_set=as_set, alpha=alpha, beta=beta, bias=bias)
+
+            fuzz_tversky()
+        elif alg_name in ("jaccard", "overlap", "cosine", "tanimoto", "sorensen"):
+            @hypothesis.settings(max_examples=args.iterations, deadline=None)
+            @hypothesis.given(
+                s1=st.text(),
+                s2=st.text(),
+                qval=st.integers(min_value=1, max_value=3),
+                as_set=st.booleans(),
+            )
+            def fuzz_token_alg(s1, s2, qval, as_set):
+                verify_pair(rust_proc, alg_name, s1, s2, qval=qval, as_set=as_set)
+
+            fuzz_token_alg()
         else:
             @hypothesis.settings(max_examples=args.iterations, deadline=None)
             @hypothesis.given(s1=st.text(), s2=st.text())
