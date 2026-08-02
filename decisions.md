@@ -324,3 +324,9 @@ MRA receives raw `req.s1` and `req.s2` strings directly in `main.rs`. No `qval`,
 
 ---
 ```
+## MongeElkan — Scoped Out
+MongeElkan was investigated and found to depend on an upstream bug in the reference Python implementation (`textdistance/algorithms/token_based.py`, line 267): `self.algorithm.maximum(sequences)` passes the pair of sequences as a single unstarred tuple argument instead of `*sequences`. This causes `maximum` to return an incorrect bound (e.g., `2` for empty inputs), leading to mismatched similarity results. Rather than replicate this bug, the project deliberately excludes MongeElkan from the Rust port scope.
+
+* **Decision**: Do not implement MongeElkan in `textdistancerust`.
+* **Reasoning**: The algorithm's behavior hinges on a documented upstream bug; preserving correctness requires either fixing the Python code (outside project scope) or omitting the algorithm. To keep the Rust implementation faithful and avoid reproducing known bugs, we scoped it out.
+* **Action**: Removed module export and IPC match arm; no further code related to MongeElkan remains.

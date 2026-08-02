@@ -933,6 +933,24 @@ fn process_request(req: &FuzzRequest) -> FuzzResponse {
                 error: None,
             }
         }
+                // MongeElkan match arm removed – scoped out
+                    // similarity: Some(sim),
+                    // distance: Some(dist),
+                    // normalized_similarity: Some(norm_sim),
+                    // normalized_distance: Some(norm_dist),
+                    // subsequence: None,
+                    // error: None,
+                // },
+                _ => FuzzResponse {
+                    // similarity: None,
+                    // distance: None,
+                    // normalized_similarity: None,
+                    // normalized_distance: None,
+                    // subsequence: None,
+                    // error: Some("Calculation failed".to_string()),
+                // },
+            }
+        },
         _ => FuzzResponse {
             similarity: None,
             distance: None,

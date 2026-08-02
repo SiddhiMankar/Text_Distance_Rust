@@ -16,6 +16,8 @@ pub mod tanimoto;
 pub mod tokenizer;
 pub mod traits;
 pub mod tversky;
+// monge_elkan module scoped out
+pub mod damerau_levenshtein;
 
 pub use bag::Bag;
 pub use mra::Mra;
@@ -35,3 +37,5 @@ pub use tanimoto::Tanimoto;
 pub use tokenizer::{find_ngrams, to_char_vec, to_word_vec};
 pub use traits::{DistanceMetric, SimilarityMetric};
 pub use tversky::Tversky;
+// MongeElkan re-export removed – scoped out
+pub use damerau_levenshtein::DamerauLevenshtein;
