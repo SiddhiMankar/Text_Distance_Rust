@@ -183,7 +183,80 @@ This document records all architectural choices, trait abstractions, empty-input
   * When `bias` is provided (e.g. `bias=1.0`), if short inputs produce empty token lists `[]` (len 0), Python evaluates $\frac{\text{inter} + \text{bias}}{\text{result} + \text{inter} + \text{bias}} = \frac{0 + 1.0}{0 + 0 + 1.0} = 1.0$.
   * Rust accurately models this dual branch (unbiased $0.0$ fallback vs biased ratio evaluation), achieving 100% differential parity.
 
----
+## 15. `Bag` Distance Metric & Raw Input Length Normalization
+* **Decision**: Implement Bag distance formula $\max(|A \setminus B|, |B \setminus A|)$ using multiset difference counts, deriving `maximum` as $\max(\text{len}(s1), \text{len}(s2))$ based on raw sequence lengths.
+* **Empirical Python Behavior & Edge Case Verification**:
+  * Inherits from `_Base` (distance metric). Python `Bag` does not accept `as_set` argument (only `qval`).
+  * `Bag.maximum` returns $\max(\text{len}(s1), \text{len}(s2))$, regardless of $q$-gram window size.
+  * For asymmetric inputs shorter than $q$-gram length $q$ (e.g. `('', '0')` with `qval=2`), $q$-gram token lists evaluate to `[]` (count 0), yielding `distance = 0.0`, `similarity = max_len = 1.0`.
+  * Rust computes distance naturally from tokenized sequences while maintaining raw character length `maximum`, achieving 100% differential parity.
+
+## 16. MRA (Match Rating Approach) — Phonetic Encoder & Standalone Design
+
+### Context
+
+`MRA` (Western Airlines Surname Match Rating Algorithm) is a phonetic string similarity algorithm whose core operating unit is not a token/char vector but a custom-encoded phonetic string. It inherits `_BaseSimilarity` in Python, meaning `similarity = __call__`, `distance = maximum - similarity`, `normalized_distance = distance / maximum` (0 when max=0), `normalized_similarity = 1 - normalized_distance`.
+
+### Key Empirical Findings (verified against live Python library)
+
+| Input pair | `__call__` | `.similarity()` | `.distance()` | `.maximum()` | `norm_sim` | `norm_dist` |
+|---|---|---|---|---|---|---|
+| `("", "")` | `0` | `0` | `0` | `0` | **`1`** | `0` |
+| `("", "abc")` | `0` | `0` | `1` | `1` | `0.0` | `1.0` |
+| `("cat", "cats")` | `2` | `2` | `1` | `3` | `0.667` | `0.333` |
+| `("hello", "hello")` | `2` | `2` | `0` | `2` | `1.0` | `0.0` |
+| `("a", "b")` | `0` | `0` | `1` | `1` | `0.0` | `1.0` |
+| `("a", "bcdfg")` | `0` | `0` | `1` | `1` | `0.0` | `1.0` |
+
+- `MRA.maximum()` computes `max(len(enc1), len(enc2))` where `enc1`, `enc2` are the **MRA-encoded strings**, not raw char counts.
+- `("", "")`: Python `Base.normalized_distance` early-exits with `0` when `maximum == 0` → `normalized_similarity = 1 - 0 = 1`. Rust matches this by computing `normalized_distance = distance / maximum` with the `max==0 → 0.0` guard, then `normalized_similarity = 1.0 - 0.0 = 1.0`.
+- `("", "abc")`: `__call__` returns `0` (early exit: `if not all(sequences)` fires because `""` is falsy). `maximum = max(0, 1) = 1`. `distance = 1 - 0 = 1`. `norm_sim = 0.0`.
+
+### Encoding Algorithm (`_calc_mra`)
+
+1. Uppercase the string.
+2. Keep the first character; remove `A E I O U` from all subsequent characters.
+3. Collapse consecutive duplicate characters (Unix `uniq`-style).
+4. If the result is longer than 6 characters, keep first 3 + last 3.
+
+```
+"hello"    → "HELLO"   → "H"+"LL"   → dedup → "HL"       (len 2)
+"world"    → "WORLD"   → "W"+"RLD"  → dedup → "WRLD"     (len 4)
+"catherine"→ "CATHERINE"→"C"+"THRN"→ dedup → "CTHRN"    (len 5)
+"kathryn"  → "KATHRYN" → "K"+"THRYN"→ dedup → "KTHRYN"  (len 6)
+```
+
+### Comparison Algorithm
+
+For two strings (after encoding to `Vec<char>`):
+1. If either **raw** input is empty → return `0`.
+2. Compute `max_length = max(len(enc1), len(enc2))`. If `|len1 - len2| > 2` (i.e. `> count` where `count = 2`), return `0`.
+3. Run **exactly `count = 2` iterations**:
+   - Zip sequences positionally; keep pairs where chars are **not** equal.
+   - Append the non-overlapping tail (beyond `min(len1, len2)`) of each sequence.
+   - Update lengths.
+4. Return `max_length - max(remaining_lengths)`.
+
+### Design Decision: Standalone Struct (Not Generic Trait)
+
+**Decision**: `Mra` struct exposes methods `compute()`, `similarity()`, `distance()`, `normalized_similarity()`, `normalized_distance()` operating on `&str` directly. It does NOT implement the generic `SimilarityMetric<T>` trait.
+
+**Reasoning**: MRA's `maximum()` is defined over MRA-encoded lengths, not over the raw input slice length. Forcing it into `SimilarityMetric<char>` would require passing pre-encoded char vecs, which loses information about which chars are the "first character" (special rule: first char is always kept). The phonetic encoder is an integral part of the comparison logic, not a separable pre-processing step.
+
+### Bug Caught During Implementation: NUL Char Dedup Sentinel
+
+**Bug**: The dedup step in `calc_mra` initialized `prev = '\0'` (NUL). This caused any input beginning with a NUL character (`\x00`) to have that character silently dropped (since `'\x00' == '\0'`), making `calc_mra("\x00")` return `""` instead of `"\x00"`.
+
+**Impact**: `maximum_score("", "\x00")` returned `0` instead of `1`, causing `distance("", "\x00")` to return `0.0` instead of `1.0`.
+
+**Fix**: Changed `prev` from `'\0'` to `Option<char> = None`. The comparison `Some(c) != prev` correctly handles any char including NUL.
+
+**Detection**: Hypothesis found the case `fuzz_mra(s1='', s2='\x00')` on the first fuzz run, before the fix was applied.
+
+### IPC Handler
+
+MRA receives raw `req.s1` and `req.s2` strings directly in `main.rs`. No `qval`, `as_set`, `alpha`, `beta`, or `bias` parameters apply.
+
 
 ## Log of Ported Algorithms & Decisions
 
@@ -200,3 +273,54 @@ This document records all architectural choices, trait abstractions, empty-input
 | **`Tanimoto`** | `SimilarityMetric` | Computes $\log_2(\text{Jaccard})$, returning `0.0` for identical inputs and `f64::NEG_INFINITY` for disjoint inputs. | Verified (10k fuzz) |
 | **`Sorensen`** | `SimilarityMetric` | Supports multiset/set Sorensen-Dice coefficient $\frac{2\|A \cap B\|}{\|A\| + \|B\|}$, $q$-gram tokenization (`qval`), raw identity quick_answer, and total-count safety. | Verified (10k fuzz) |
 | **`Tversky`** | `SimilarityMetric` | Generalized asymmetric index with parameters $\alpha, \beta, \text{bias}$. Unifies Jaccard ($\alpha=1,\beta=1$) and Sorensen ($\alpha=0.5,\beta=0.5$). | Verified (10k fuzz) |
+| **`Bag`** | `DistanceMetric` | Multiset difference distance $\max(\|A \setminus B\|, \|B \setminus A\|)$ with raw sequence length maximum normalization. | Verified (10k fuzz) |
+| **`MRA`** | Standalone (phonetic) | Match Rating Approach operates on raw `&str` inputs via its own phonetic encoder; does not use generic `SimilarityMetric<T>` trait. `normalized_similarity("","") = 1.0`. | Verified (10k fuzz) |
+| **`StrCmp95`** | Standalone / BaseSimilarity | Jaro-Winkler strcmp95 variant with phonetic/OCR character matrix (`sp_mx`), Winkler prefix scaling, optional `long_strings` tolerance adjustment, and Python whitespace trim. | Verified (10k fuzz) |
+
+---
+
+## 17. StrCmp95 (Jaro-Winkler strcmp95 Variant) — Phonetic/OCR Matrix & Whitespace Parity
+
+### Context
+
+`StrCmp95` implements the strcmp95 similarity algorithm (Winkler 1995). In Python reference `textdistance.algorithms.edit_based.StrCmp95`, it inherits `_BaseSimilarity`.
+- `maximum` = 1.0
+- `similarity` = `__call__`
+- `distance` = `maximum - similarity` = `1.0 - similarity`
+- `normalized_similarity` = `similarity`
+- `normalized_distance` = `1.0 - similarity`
+
+### Key Empirical Findings & Parity Rules
+
+1. **Preprocessing & Quick Answer Parity**:
+   - `s1` and `s2` are first trimmed of whitespace and converted to uppercase.
+   - If cleaned `s1 == s2` (e.g. `("", "")`, `("a", "A")`, `("  ", "   ")`), returns `1.0`.
+   - If either cleaned string is empty while the other is non-empty (`("", "a")`), returns `0.0`.
+2. **ASCII C0 Control Code Whitespace Parity**:
+   - Python's `str.strip()` strips all 29 Unicode whitespace characters, which includes ASCII C0 control characters 28 to 31 (`0x1C..=0x1F` / File, Group, Record, Unit separators).
+   - Rust's `char::is_whitespace()` follows standard Unicode `White_Space` which omits `0x1C..=0x1F`.
+   - **Fix**: Implemented `is_python_whitespace` helper in Rust (`c.is_whitespace() || matches!(c as u32, 0x1C..=0x1F)`) to match Python's `strip()` exact character set.
+3. **Phonetic & OCR Substitution Matrix (`sp_mx`)**:
+   - 36 character pairs (e.g., `'O'` and `'0'`, `'I'` and `'1'`, `'B'` and `'V'`) receive a partial match weight boost (`+3` weight / divided by 10) for unmatched characters within range `0 < ord(char) < 91`.
+4. **Winkler Modification & `long_strings` Parameter**:
+   - Prefix boost up to 4 characters applied if base weight `> 0.7`. Digits in prefix halt the prefix count.
+   - Supports optional `long_strings` boolean parameter (`StrCmp95::with_config(long_strings)`), matching Python parameter signature.
+
+---
+
+### Step 14: `StrCmp95`
+
+- **Whitespace Handling**: `StrCmp95` uses Python's `.strip()`, which removes not just spaces and tabs, but also all ASCII C0 control codes (`0x1C..=0x1F`). Our Rust implementation implements a custom `is_python_whitespace()` to match this behavior identically.
+- **Early Exit**: `StrCmp95.__call__` explicitly calls `self.quick_answer()` AFTER calling `.strip().upper()`. This means `StrCmp95("  ", "   ")` strips down to empty strings, triggering the `quick_answer` empty string logic and returning `1.0`.
+- **Default Parameters**: The Python default is `long_strings=False`.
+- **Reference Values**: Our implementation perfectly matches Winkler's original test cases (e.g., `MARTHA` / `MARHTA` = `0.961111`, `shackleford` / `shackelford` = `0.981818`).
+
+### Step 15: `Editex`
+
+- **Type Mixing**: Python's `__call__` is annotated to return `float`, but computationally returns `int` (via integer matrix cells). Our Rust implementation correctly returns `usize` and converts to `f64` in the IPC harness to match the driver's generic expectations.
+- **`maximum()` Calculation**: The maximum bound is computed using raw input character counts (`max(len(s1), len(s2)) * mismatch_cost`) *before* the `.upper()` transformation is applied, even if `.upper()` expands multi-byte characters.
+- **Matrix Initialization Prepends**: The DP matrix initialization implicitly relies on prepending a space (`' '`) to strings before iterating (e.g., `s1 = ' ' + s1.upper()`). The space acts as an anchor for the `d_cost` and `r_cost` functions which evaluate `mismatch_cost` when interacting with spaces because they aren't in the initialized phonetic letter groups.
+- **Methods**: Inheriting from `_Base` makes `Editex` behave as a distance metric fundamentally (`__call__` = `distance()`), with `similarity()` dynamically calculated as `maximum() - distance()`.
+
+---
+```

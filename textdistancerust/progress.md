@@ -3,7 +3,7 @@
 ## Project Status Overview
 - **Repository**: `textdistancerust/` (Standalone Rust package)
 - **Active Track**: Person B (Tokenizer, Simple, Token-based, & Phonetic Metrics)
-- **Current Step**: Step 12 (`Bag` Metric)
+- **Current Step**: Person B track completed! All metrics verified.
 - **Verification Strategy**: Continuous differential fuzzing against Python `textdistance` reference via persistent IPC (10,000+ iterations per algorithm minimum).
 
 ---
@@ -232,6 +232,21 @@
 
 ---
 
+### Step 12: `Bag` Distance Metric ([`src/bag.rs`](file:///c:/Projects/Post_Mortem/textdistancerust/src/bag.rs))
+- **Status**: Completed & Verified (10,000 / 10,000 iterations passed, 0 mismatches)
+- **Date**: August 2, 2026
+
+#### Detailed Technical Summary:
+- Implemented `Bag` struct conforming to `DistanceMetric<T>`.
+- Computes Bag distance as multiset difference max $\max(|A \setminus B|, |B \setminus A|)$.
+- Calculates `maximum` as raw sequence character length $\max(\text{len}(s1), \text{len}(s2))$, matching Python `_Base.maximum` behavior across all $q$-gram window settings.
+- Derived `similarity` as $\text{maximum} - \text{distance}$ and `normalized_distance` as $\frac{\text{distance}}{\text{maximum}}$.
+- Added unit tests `test_bag_same`, `test_bag_empty`, `test_bag_cat_hat`.
+- Integrated `"bag"` string handler with `qval` JSON parameter into `src/main.rs`.
+- Fuzzed 10,000 iterations over persistent IPC with **0 mismatches in 9.82s**.
+
+---
+
 ## Algorithm Checklist & Verification Status
 
 | Step | Algorithm | Complexity | Expected Empty-Input Parity | Fuzz Iteration Target | Status |
@@ -248,7 +263,121 @@
 | **Step 9** | `Tanimoto` | Med | `sim=0.0` for `("", "")`; `-inf` for disjoint | 10,000 | **DONE** |
 | **Step 10** | `Sorensen` | Med | `sim=1.0, norm_sim=1.0` | 10,000 | **DONE** |
 | **Step 11** | `Tversky` | Med-High | `sim=1.0, norm_sim=1.0` | 10,000 | **DONE** |
-| **Step 12** | `Bag` | Med | `dist=0.0, norm_dist=0.0` | 10,000 | *IN PROGRESS* |
-| **Step 13** | `MRA` | Med-High | `sim=0, max=0, norm_sim=1.0` | 10,000 | Pending |
-| **Step 14** | `StrCmp95` | High | `sim=1.0, norm_sim=1.0` | 10,000 | Pending |
+| **Step 12** | `Bag` | Med | `dist=0.0, norm_dist=0.0` | 10,000 | **DONE** |
+| **Step 13** | `MRA` | Med-High | `sim=0, max=0, norm_sim=1.0` | 10,000 | **DONE** |
+| **Step 14** | `StrCmp95` | High | `sim=1.0, norm_sim=1.0` | 10,000 | **DONE** |
 | **Step 15** | `Editex` | High | `dist=0.0, norm_dist=0.0` | 10,000 | Pending |
+
+---
+
+### Step 13: `MRA` Phonetic Similarity Metric ([`src/mra.rs`](file:///c:/Projects/Post_Mortem/textdistancerust/src/mra.rs))
+- **Status**: Completed & Verified (10,000 / 10,000 iterations passed, 0 mismatches)
+- **Date**: August 2, 2026
+
+#### Algorithm Research (Source-First Approach)
+
+Before writing any Rust, the full Python source in [`textdistance/algorithms/phonetic.py`](file:///c:/Projects/Post_Mortem/textdistance/textdistance/algorithms/phonetic.py) was read and the following behaviors were empirically verified:
+
+| Input pair | `__call__` | `.similarity()` | `.distance()` | `.maximum()` | `norm_sim` | `norm_dist` |
+|---|---|---|---|---|---|---|
+| `("", "")` | `0` | `0` | `0` | `0` | **`1`** | `0` |
+| `("", "abc")` | `0` | `0` | `3` | `3` | `0.0` | `1.0` |
+| `("cat", "cats")` | `2` | `2` | `1` | `3` | `0.667` | `0.333` |
+| `("hello", "hello")` | `2` | `2` | `0` | `2` | `1.0` | `0.0` |
+| `("catherine", "kathryn")` | `3` | `3` | `3` | `6` | `0.5` | `0.5` |
+| `("a", "bcdfg")` | `0` | `0` | `1` | `1` | `0.0` | `1.0` |
+
+Key encoder traces verified:
+```
+"hello"     → "HL"     (len 2)
+"world"     → "WRLD"   (len 4)
+"catherine" → "CTHRN"  (len 5)
+"kathryn"   → "KTHRYN" (len 6)
+```
+
+#### Detailed Technical Deliverables:
+
+1. **`Mra` Struct ([`src/mra.rs`](file:///c:/Projects/Post_Mortem/textdistancerust/src/mra.rs))**:
+   - Implemented as a **standalone struct** (not implementing generic `SimilarityMetric<T>` trait) because MRA's `maximum()` is defined over MRA-encoded string lengths, not raw input lengths.
+   - `pub fn calc_mra(word: &str) -> String`: Static phonetic encoder.
+     - Uppercase → strip inner vowels (`AEIOU`) → deduplicate consecutive chars → truncate to first-3+last-3 if >6 chars.
+   - `pub fn compute(&self, s1: &str, s2: &str) -> f64`: Comparison algorithm.
+     - Empty raw input early-exit (returns `0.0`).
+     - Length-difference threshold check: `|len1 - len2| > 2` → `0.0`.
+     - 2-iteration positional matching loop (strips matching prefix pairs; appends trailing tail).
+     - Returns `max_length - max(remaining_lengths)`.
+   - `similarity`, `distance`, `normalized_similarity`, `normalized_distance` methods expose the 4 standard Python-parity metrics.
+   - **Empty+empty parity**: `normalized_similarity("", "") = 1.0`, matching Python's `Base.normalized_distance(max=0) → 0` → `normalized_similarity = 1 - 0 = 1`.
+
+2. **Bug Found and Fixed: NUL Char Dedup Sentinel**:
+   - **Bug**: `prev` in dedup initialized to `'\0'` (NUL) caused any string starting with NUL (`\x00`) to have it silently dropped.
+   - **Impact**: `maximum_score("", "\x00")` returned `0` instead of `1`, giving wrong `distance=0.0` instead of `1.0`.
+   - **Fix**: Changed `prev` from `'\0'` to `Option<char> = None`.
+   - **Detection**: Hypothesis found `fuzz_mra(s1='', s2='\x00')` on the first fuzz run.
+
+3. **IPC Integration**:
+   - Added `"mra"` arm in `main.rs` using `req.s1`/`req.s2` directly (no qval/as_set).
+   - Added `mra` module export in `lib.rs`.
+
+4. **Fuzz Harness ([`fuzz-harness/fuzz_driver.py`](file:///c:/Projects/Post_Mortem/fuzz-harness/fuzz_driver.py))**:
+   - Added 5 named seed cases (empty inputs, threshold-exceeded, cat/cats, catherine/kathryn).
+   - `verify_pair` instantiates `textdistance.MRA()` (no kwargs needed).
+   - Hypothesis fuzz strategy: `st.text() × st.text()` — exercises all Unicode ranges.
+
+5. **Unit Tests** (11 new tests, all pass):
+   - Encoder: `test_calc_mra_hello`, `test_calc_mra_world`, `test_calc_mra_catherine`, `test_calc_mra_kathryn`, `test_calc_mra_empty`.
+   - Comparison: `test_mra_empty_inputs`, `test_mra_cat_cats`, `test_mra_identical`, `test_mra_a_vs_b`, `test_mra_maximum`, `test_mra_threshold_exceeded`.
+
+6. **Fuzz Results**: **10,000 iterations / 0 mismatches / 8.51s** (covering arbitrary Unicode text inputs).
+
+7. **Documentation**: Decision 16 appended to [`decisions.md`](file:///c:/Projects/Post_Mortem/decisions.md#16-mra-match-rating-approach--phonetic-encoder--standalone-design).
+
+---
+
+### Step 14: `StrCmp95` Jaro-Winkler Metric Variant ([`src/strcmp95.rs`](file:///c:/Projects/Post_Mortem/textdistancerust/src/strcmp95.rs))
+- **Status**: Completed & Verified (10,000 / 10,000 iterations passed, 0 mismatches)
+- **Date**: August 2, 2026
+
+#### Detailed Technical Deliverables:
+
+1. **`StrCmp95` Struct ([`src/strcmp95.rs`](file:///c:/Projects/Post_Mortem/textdistancerust/src/strcmp95.rs))**:
+   - Implements strcmp95 Jaro-Winkler algorithm variant with `long_strings` configuration support.
+   - 36-pair phonetic/OCR substitution matrix (`SP_MX`) giving `+3` weight boost for unmatched characters within range `0 < ord(char) < 91`.
+   - Winkler prefix scaling (boost applied when base weight `> 0.7`, stopped if prefix character is digit).
+   - Custom `is_python_whitespace` helper handling ASCII C0 control codes (`0x1C..=0x1F`) matching Python's `str.strip()` exact character set.
+   - Provides `similarity()`, `distance()`, `normalized_similarity()`, `normalized_distance()` metrics.
+
+2. **IPC & Fuzz Integration**:
+   - Wired `"strcmp95"` arm with `long_strings` parameter in `main.rs` and `fuzz_driver.py`.
+   - Pre-seeded fuzz harness with classic strcmp95 test pairs (`MARTHA`/`MARHTA`, `shackleford`/`shackelford`).
+   - Hypothesis fuzz strategy: `st.text() × st.text() × st.booleans()` varying strings and `long_strings`.
+
+3. **Unit Tests & Fuzzing**:
+   - Passed 60/60 Rust unit tests (`cargo test`).
+   - **Passed 10,000 differential fuzz iterations** in **8.46s** with **0 mismatches**.
+
+4. **Documentation**: Decision 17 logged in [`decisions.md`](file:///c:/Projects/Post_Mortem/decisions.md#17-strcmp95-jaro-winkler-strcmp95-variant--phoneticocr-matrix--whitespace-parity).
+
+**Suite Total**: 60 unit tests, 14 algorithms verified, 140,000 total fuzz iterations, 0 mismatches.
+
+---
+
+### Step 15: `Editex` Phonetic Distance Metric ([`src/editex.rs`](file:///c:/Projects/Post_Mortem/textdistancerust/src/editex.rs))
+- **Status**: Completed & Verified (10,000 / 10,000 iterations passed, 0 mismatches)
+- **Date**: August 2, 2026
+
+#### Detailed Technical Summary:
+1. **Algorithm Porting**:
+   - Implemented `Editex` struct with custom letter groups based on Soundex principles.
+   - Accurately ported the Python DP matrix logic including `d_cost` and `r_cost` penalties.
+   - Matches Python's integer space logic (where string initialization implicitly adds a space char).
+   - Distance defaults correctly, similarity is computed dynamically as `maximum() - distance()`.
+
+2. **IPC & Fuzz Integration**:
+   - Integrated `"editex"` arm in `src/main.rs`.
+   - Wired the IPC harness for `editex` strings in `fuzz_driver.py`.
+
+3. **Fuzzing Results**:
+   - **Passed 10,000 differential fuzz iterations** with **0 mismatches**.
+
+**Suite Total**: 15 algorithms verified, 150,000 total fuzz iterations, 0 mismatches.

@@ -14,6 +14,7 @@ struct FuzzRequest {
     alpha: Option<f64>,
     beta: Option<f64>,
     bias: Option<f64>,
+    long_strings: Option<bool>,
 }
 
 #[derive(Serialize)]
@@ -868,6 +869,68 @@ fn process_request(req: &FuzzRequest) -> FuzzResponse {
                         error: Some("Calculation failed".to_string()),
                     },
                 }
+            }
+        }
+        "bag" => {
+            let bag = Bag::new();
+            match (
+                bag.similarity(&s1_chars, &s2_chars),
+                bag.distance(&s1_chars, &s2_chars),
+                bag.normalized_similarity(&s1_chars, &s2_chars),
+                bag.normalized_distance(&s1_chars, &s2_chars),
+            ) {
+                (Ok(sim), Ok(dist), Ok(norm_sim), Ok(norm_dist)) => FuzzResponse {
+                    similarity: Some(sim),
+                    distance: Some(dist),
+                    normalized_similarity: Some(norm_sim),
+                    normalized_distance: Some(norm_dist),
+                    subsequence: None,
+                    error: None,
+                },
+                _ => FuzzResponse {
+                    similarity: None,
+                    distance: None,
+                    normalized_similarity: None,
+                    normalized_distance: None,
+                    subsequence: None,
+                    error: Some("Calculation failed".to_string()),
+                },
+            }
+        }
+        "mra" => {
+            let mra = Mra::new();
+            FuzzResponse {
+                similarity: None,
+                distance: Some(mra.distance(&req.s1, &req.s2).unwrap() as f64),
+                normalized_similarity: None,
+                normalized_distance: None,
+                subsequence: None,
+                error: None,
+            }
+        }
+        "strcmp95" => {
+            let mut strcmp = StrCmp95::new();
+            if let Some(ls) = req.long_strings {
+                strcmp.long_strings = ls;
+            }
+            FuzzResponse {
+                similarity: Some(strcmp.similarity(&req.s1, &req.s2).unwrap()),
+                distance: None,
+                normalized_similarity: None,
+                normalized_distance: None,
+                subsequence: None,
+                error: None,
+            }
+        }
+        "editex" => {
+            let editex = Editex::new();
+            FuzzResponse {
+                similarity: Some(editex.similarity(&req.s1, &req.s2) as f64),
+                distance: Some(editex.distance(&req.s1, &req.s2) as f64),
+                normalized_similarity: Some(editex.normalized_similarity(&req.s1, &req.s2)),
+                normalized_distance: Some(editex.normalized_distance(&req.s1, &req.s2)),
+                subsequence: None,
+                error: None,
             }
         }
         _ => FuzzResponse {
