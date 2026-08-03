@@ -48,7 +48,11 @@ TEST_PAIRS = [
 ]
 
 def run_benchmarks():
-    bin_path = str(Path(__file__).parent / "textdistancerust" / "target" / "release" / "textdistancerust-cli.exe")
+    base_bin = Path(__file__).parent / "textdistancerust" / "target" / "release" / "textdistancerust-cli"
+    bin_path = str(base_bin) if base_bin.exists() else str(base_bin.with_suffix(".exe"))
+    if not Path(bin_path).exists():
+        bin_path = "textdistancerust-cli"
+
     
     # Start persistent Rust process
     proc = subprocess.Popen(
@@ -114,7 +118,8 @@ def run_benchmarks():
     proc.terminate()
     # Run native benchmark
     native_results = {}
-    bench_native_exe = str(Path(__file__).parent / "textdistancerust" / "target" / "release" / "bench_native.exe")
+    bench_base = Path(__file__).parent / "textdistancerust" / "target" / "release" / "bench_native"
+    bench_native_exe = str(bench_base) if bench_base.exists() else str(bench_base.with_suffix(".exe"))
     try:
         native_output = subprocess.check_output([bench_native_exe], text=True, encoding='utf-8')
         for line in native_output.strip().split('\n'):
@@ -135,7 +140,7 @@ def run_benchmarks():
         f.write(f"- **Sample Size**: {N_RUNS} iterations per test pair across {len(TEST_PAIRS)} standard test string pairs ({N_RUNS * len(TEST_PAIRS)} calls per algorithm).\n")
         f.write("- **Measurement Unit**: Microseconds (µs) per operation.\n")
         f.write("- **Rust IPC Mode**: `cargo build --release` (`textdistancerust-cli`) communicating via JSON-IPC over persistent stdin/stdout pipes.\n")
-        f.write("- **Rust Native Mode**: Direct in-process library calls measured via a native Rust binary (`bench_native.exe`).\n")
+        f.write("- **Rust Native Mode**: Direct in-process library calls measured via a native Rust binary (`bench_native`).\n")
         f.write("- **Note**: Rust IPC timings include full JSON serialization, stdin write, process pipe I/O, deserialization, calculation, stdout serialization, and response reading overhead.\n\n")
         f.write("## Results Summary\n\n")
         f.write("| Algorithm | Python (µs) | Rust IPC (µs) | Rust Native (µs) | IPC Speedup | Native Speedup |\n")

@@ -1,0 +1,13 @@
+target/
+textdistancerust/target/
+.git/
+.gitignore
+.hypothesis/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.pytest_cache/
+.vscode/
+.idea/
+artifacts/

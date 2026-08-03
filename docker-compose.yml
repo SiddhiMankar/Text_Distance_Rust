@@ -1,0 +1,37 @@
+version: '3.8'
+
+services:
+  # 1. Run full Rust unit test suite
+  test:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: textdistancerust-test
+    command: cargo test --manifest-path textdistancerust/Cargo.toml
+
+  # 2. Run Python Differential Fuzz Harness
+  # Example usage: docker compose run --rm fuzz python3 fuzz-harness/fuzz_driver.py --alg jaccard --iterations 10000
+  fuzz:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: textdistancerust-fuzz
+    command: python3 fuzz-harness/fuzz_driver.py --alg hamming --iterations 1000
+
+  # 3. Run Python vs Rust performance benchmark
+  benchmark:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: textdistancerust-benchmark
+    command: python3 benchmark.py
+
+  # 4. Interactive JSON-IPC CLI binary
+  cli:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: textdistancerust-cli
+    stdin_open: true
+    tty: true
+    command: textdistancerust-cli

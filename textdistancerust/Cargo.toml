@@ -15,3 +15,12 @@ path = "src/lib.rs"
 [[bin]]
 name = "textdistancerust-cli"
 path = "src/main.rs"
+
+[[bin]]
+name = "tdcli"
+path = "src/bin/tdcli.rs"
+
+[[bin]]
+name = "integration_tests"
+path = "src/bin/integration_tests.rs"
+

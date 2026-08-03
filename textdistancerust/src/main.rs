@@ -1219,32 +1219,6 @@ fn process_request(req: &FuzzRequest) -> FuzzResponse {
                 error: None,
             }
         }
-        "hamming" => {
-            let hamming = Hamming::new();
-            match (
-                hamming.distance(&s1_chars, &s2_chars),
-                hamming.similarity(&s1_chars, &s2_chars),
-                hamming.normalized_distance(&s1_chars, &s2_chars),
-                hamming.normalized_similarity(&s1_chars, &s2_chars),
-            ) {
-                (Ok(dist), Ok(sim), Ok(norm_dist), Ok(norm_sim)) => FuzzResponse {
-                    similarity: Some(sim),
-                    distance: Some(dist),
-                    normalized_similarity: Some(norm_sim),
-                    normalized_distance: Some(norm_dist),
-                    subsequence: None,
-                    error: None,
-                },
-                _ => FuzzResponse {
-                    similarity: None,
-                    distance: None,
-                    normalized_similarity: None,
-                    normalized_distance: None,
-                    subsequence: None,
-                    error: Some("Calculation failed".to_string()),
-                },
-            }
-        }
         "damerau_levenshtein" => {
             let dl = DamerauLevenshtein::new();
             match (

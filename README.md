@@ -3,6 +3,7 @@
 [![Build Status](https://img.shields.io/badge/build-passing-brightgreen.svg)]()
 [![Unsafe Code](https://img.shields.io/badge/unsafe-forbid-blue.svg)]()
 [![Fuzz Verification](https://img.shields.io/badge/fuzzing-10000%2B%20iters%2Falg-success.svg)]()
+[![Docker Ready](https://img.shields.io/badge/docker-ready-blue.svg)]()
 
 `textdistancerust` is a high-performance, standalone, safe Rust port of Python's popular sequence distance library [`life4/textdistance`](https://github.com/life4/textdistance).
 
@@ -68,7 +69,36 @@ All 20 ported algorithms have passed 10,000+ iterations of differential fuzzing 
 
 ---
 
-## Building and Verification
+## Containerized Setup (Docker & Docker Compose)
+
+The repository provides a complete Docker environment with pre-configured Rust and Python toolchains.
+
+### 1. Build Docker Image
+```bash
+docker build -t textdistancerust:latest .
+```
+
+### 2. Run Commands with Docker Compose
+- **Run Unit Tests**:
+  ```bash
+  docker compose run --rm test
+  ```
+- **Run Differential Fuzzing**:
+  ```bash
+  docker compose run --rm fuzz python3 fuzz-harness/fuzz_driver.py --alg hamming --iterations 10000
+  ```
+- **Run Performance Benchmarks**:
+  ```bash
+  docker compose run --rm benchmark
+  ```
+- **Run Interactive JSON-IPC CLI**:
+  ```bash
+  docker compose run --rm -i cli
+  ```
+
+---
+
+## Local Building and Verification
 
 ### 1. Build the Rust Crate
 ```bash
@@ -93,7 +123,7 @@ cargo clippy --all-targets
 
 The project includes a Python Hypothesis differential fuzz harness (`fuzz-harness/fuzz_driver.py`) that streams randomized test inputs to `textdistancerust-cli` via JSON-IPC over persistent stdin/stdout pipes, comparing outputs with Python `textdistance`.
 
-To execute differential fuzzing:
+To execute differential fuzzing locally:
 ```bash
 python fuzz-harness/fuzz_driver.py --alg <alg_name> --iterations 10000
 ```
@@ -103,11 +133,15 @@ python fuzz-harness/fuzz_driver.py --alg <alg_name> --iterations 10000
 ## Project Structure
 
 ```text
-Post_Mortem/
+.
+├── Dockerfile                  # Unified Rust + Python Docker image
+├── docker-compose.yml          # Services: test, fuzz, benchmark, cli
+├── requirements.txt            # Python dependencies (textdistance, hypothesis)
+├── .dockerignore               # Docker context exclusion rules
 ├── textdistancerust/           # Rust Crate
 │   ├── Cargo.toml
 │   └── src/
-│       ├── lib.rs              # Library exports
+│       ├── lib.rs              # Library re-exports (all 20 algorithms)
 │       ├── main.rs             # Persistent JSON-IPC CLI binary
 │       ├── traits.rs           # Generic DistanceMetric & SimilarityMetric traits
 │       ├── tokenizer.rs        # Char, word, and n-gram tokenization
