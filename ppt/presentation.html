@@ -259,7 +259,7 @@ table.rt tr:nth-child(even) { background: #f8f8f8; }
     </p>
   </div>
   <div style="margin-top:20px;font-family:'VT323',monospace;font-size:22px;color:#666;">
-    Presented by: Siddhi Mankar &amp; Team &nbsp;|&nbsp; Project: Text_Distance_Rust &nbsp;|&nbsp; Rust 1.82
+    Presented by: No comments needed &nbsp;|&nbsp; Project: <span onclick="openProjectPopup()" style="color:var(--blue);text-decoration:underline;cursor:pointer;font-weight:bold;">Text_Distance_Rust</span> &nbsp;|&nbsp; Rust 1.82
   </div>
 </div>
 
@@ -557,6 +557,37 @@ Rust apps  cargo run  Python Hypothesis
   <div class="clock" id="clk">--:--</div>
 </div>
 
+<!-- Project Reference Popup Modal -->
+<div id="project-popup" style="display:none; position:fixed; top:0; left:0; width:100vw; height:100vh; background:rgba(0,0,0,0.5); z-index:999; align-items:center; justify-content:center;">
+  <div class="win" style="width:480px; height:auto; max-width:90vw; border:3px solid; border-color:var(--blight) var(--bdark) var(--bdark) var(--blight); background:var(--grey);">
+    <div class="titlebar">
+      <span>ℹ️ Reference — life4/textdistance</span>
+      <div class="tbcontrols">
+        <div class="wbtn" onclick="closeProjectPopup()">✕</div>
+      </div>
+    </div>
+    <div class="body" style="padding:16px; margin:6px; background:#fff;">
+      <div style="display:flex; gap:14px; align-items:flex-start;">
+        <div style="font-size:36px;">ℹ️</div>
+        <div>
+          <div class="pxtext" style="font-size:22px; color:var(--blue); font-weight:bold;">Original Python Project</div>
+          <p style="font-size:14px; margin-top:6px; line-height:1.5; color:#333;">
+            <code>Text_Distance_Rust</code> is a 100% safe, high-performance Rust reimplementation of Python's original <strong><code>life4/textdistance</code></strong> library.
+          </p>
+          <div style="margin-top:14px;">
+            <a href="https://github.com/life4/textdistance" target="_blank" class="nbtn" style="display:inline-block; font-size:18px; text-decoration:none; padding:6px 14px; color:#000;">
+              🔗 Open life4/textdistance on GitHub ↗
+            </a>
+          </div>
+        </div>
+      </div>
+      <div style="text-align:right; margin-top:16px;">
+        <button class="nbtn" onclick="closeProjectPopup()" style="padding:4px 18px; font-size:18px;">OK</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <script>
 var SLIDE_TITLES = [
   "Text Distance Rust",
@@ -650,6 +681,13 @@ function render() {
 
 function prev() { if (cur > 0) { cur--; render(); } }
 function next() { if (cur < SLIDE_TITLES.length - 1) { cur++; render(); } }
+
+function openProjectPopup() {
+  document.getElementById("project-popup").style.display = "flex";
+}
+function closeProjectPopup() {
+  document.getElementById("project-popup").style.display = "none";
+}
 
 function toggleNotes() { showNotes = !showNotes; render(); }
 function toggleMenu() {
