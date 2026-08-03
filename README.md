@@ -1,104 +1,103 @@
-# `textdistancerust`: From-Scratch Rust Reimplementation of Python `textdistance`
+# `textdistancerust`: High-Performance Rust Port of Python `textdistance`
 
 [![Build Status](https://img.shields.io/badge/build-passing-brightgreen.svg)]()
 [![Unsafe Code](https://img.shields.io/badge/unsafe-forbid-blue.svg)]()
 [![Fuzz Verification](https://img.shields.io/badge/fuzzing-10000%2B%20iters%2Falg-success.svg)]()
 [![Docker Ready](https://img.shields.io/badge/docker-ready-blue.svg)]()
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
-`textdistancerust` is a high-performance, standalone, safe Rust port of Python's popular sequence distance library [`life4/textdistance`](https://github.com/life4/textdistance).
+`textdistancerust` is a standalone, safe Rust reimplementation of Python's popular sequence distance library [`life4/textdistance`](https://github.com/life4/textdistance).
 
-It delivers **100% behavioral equivalence** (down to $\le 10^{-9}$ floating point precision) against the Python reference implementation across **20 ported algorithms**, backed by rigorous differential fuzz testing (10,000+ iterations per algorithm, zero mismatches).
+It delivers **100% behavioral equivalence** (down to $\le 10^{-9}$ floating-point precision) against the Python reference implementation across **30 algorithms**, validated with differential property-based fuzz testing (10,000+ iterations per algorithm, 0 mismatches) and a 89-test unit/integration test suite.
+
+---
+
+## Table of Contents
+- [Key Features & Architecture](#key-features--architecture)
+- [Interactive CUI Toolkit (`tdcli`)](#interactive-cui-toolkit-tdcli)
+- [Summary of Algorithms](#summary-of-algorithms)
+- [Local Building & Testing](#local-building--testing)
+- [Differential Fuzz Harness](#differential-fuzz-harness)
+- [Docker Setup](#docker-setup)
+- [Repository Structure](#repository-structure)
+- [License](#license)
 
 ---
 
 ## Key Features & Architecture
 
-1. **Zero Python Dependency**:
-   - Compiles to a clean, standalone Rust library (`libtextdistancerust.rlib`) and CLI (`textdistancerust-cli`).
-   - Zero runtime dependence on Python, PyO3, or subprocess execution.
+1. **Zero Python Runtime Dependency**:
+   - Compiles to a clean Rust library ([`libtextdistancerust.rlib`](file:///d:/my%20study/Project/Text_Distance_Rust/textdistancerust/src/lib.rs)) and standalone binaries ([`tdcli`](file:///d:/my%20study/Project/Text_Distance_Rust/textdistancerust/src/bin/tdcli.rs) & [`textdistancerust-cli`](file:///d:/my%20study/Project/Text_Distance_Rust/textdistancerust/src/main.rs)).
 2. **Strict Zero `unsafe` Policy**:
-   - The crate enforces `#![forbid(unsafe_code)]`.
-   - Utilizes safe Rust abstractions (`Vec`, slices, safe iterators) ensuring memory safety.
+   - The crate enforces `#![forbid(unsafe_code)]` at compile time.
 3. **Generic Sequence Support (`&[T]`)**:
-   - Algorithms operate on slice sequences (`&[T]`) rather than restricting inputs to plain byte strings.
-   - Prevents UTF-8 boundary panics on multi-byte Unicode characters (e.g. CJK, Emojis) and enables matching over token vectors (`Vec<&str>`).
+   - Operates over generic slice sequences (`&[T]`) rather than plain byte strings, avoiding UTF-8 boundary panics on multi-byte Unicode characters (CJK, Emojis) and supporting token vectors (`Vec<&str>`).
 4. **Dual Trait Abstraction**:
-   - `DistanceMetric<T>`: Core trait for edit and distance-based metrics (`distance()`, `maximum()`, derived `similarity()`, `normalized_distance()`, `normalized_similarity()`).
-   - `SimilarityMetric<T>`: Core trait for token, set, and compression-based metrics (`similarity()`, `maximum()`, derived `distance()`, `normalized_similarity()`, `normalized_distance()`).
-5. **Exact Behavioral Parity & Edge Case Resilience**:
-   - All zero-maximum, empty-input, and zero-count edge cases are handled without crashing.
-   - Preserves exact Python parity for algorithms with complex edge behaviors (e.g. `Tanimoto` returning `f64::NEG_INFINITY` for disjoint sets, `StrCmp95` stripping ASCII C0 control whitespace, `ArithNCD` preserving insertion order for equal counts).
+   - [`DistanceMetric<T>`](file:///d:/my%20study/Project/Text_Distance_Rust/textdistancerust/src/traits.rs#L3-L22): Core interface for edit/distance metrics (`distance()`, `maximum()`, derived `similarity()`, `normalized_distance()`, `normalized_similarity()`).
+   - [`SimilarityMetric<T>`](file:///d:/my%20study/Project/Text_Distance_Rust/textdistancerust/src/traits.rs#L24-L47): Core interface for token/sequence metrics (`similarity()`, `maximum()`, derived `distance()`, `normalized_similarity()`, `normalized_distance()`).
+5. **Edge-Case Parity**:
+   - Implements exact Python edge behavior for zero-maximum, empty-input, and zero-count edge cases without panicking.
 
 ---
 
-## Summary of Ported Algorithms
+## Interactive CUI Toolkit (`tdcli`)
 
-All 20 ported algorithms have passed 10,000+ iterations of differential fuzzing with **0 mismatches**:
+The repository includes a zero-dependency interactive command-line user interface (**CUI**) featuring ANSI colors, emoji category tags, and Unicode box-drawing result tables.
 
-| Category | Algorithm | Rust Module | Description / Trait | Fuzz Status |
-| :--- | :--- | :--- | :--- | :--- |
-| **Simple / Sequence** | `Identity` | `identity.rs` | String identity metric | PASSED (10k fuzz) |
-| | `Length` | `length.rs` | String length difference metric | PASSED (10k fuzz) |
-| | `Prefix` | `prefix.rs` | Common prefix substring length & slice | PASSED (10k fuzz) |
-| | `Postfix` | `postfix.rs` | Common postfix substring length & slice | PASSED (10k fuzz) |
-| **Matrix-Based** | `Matrix` | `matrix.rs` | Custom score matrix matching | PASSED (10k fuzz) |
-| **Token-Based** | `Jaccard` | `jaccard.rs` | Jaccard multiset & set similarity ($q$-gram) | PASSED (10k fuzz) |
-| | `Overlap` | `overlap.rs` | Overlap coefficient ($\min$ count denominator) | PASSED (10k fuzz) |
-| | `Cosine` | `cosine.rs` | Cosine / Ochiai coefficient | PASSED (10k fuzz) |
-| | `Tanimoto` | `tanimoto.rs` | Logarithmic Tanimoto similarity | PASSED (10k fuzz) |
-| | `Sorensen` | `sorensen.rs` | Sorensen-Dice similarity coefficient | PASSED (10k fuzz) |
-| | `Tversky` | `tversky.rs` | Asymmetric Tversky index ($\alpha, \beta, \text{bias}$) | PASSED (10k fuzz) |
-| **Edit-Based** | `Bag` | `bag.rs` | Multiset difference distance | PASSED (10k fuzz) |
-| | `Hamming` | `hamming.rs` | Positional mismatch distance | PASSED (10k fuzz) |
-| | `DamerauLevenshtein` | `damerau_levenshtein.rs` | Restricted optimal string alignment (OSA) | PASSED (10k fuzz) |
-| | `Editex` | `editex.rs` | Phonetic group Editex distance | PASSED (10k fuzz) |
-| | `StrCmp95` | `strcmp95.rs` | Jaro-Winkler strcmp95 (phonetic matrix) | PASSED (10k fuzz) |
-| **Phonetic** | `MRA` | `mra.rs` | Match Rating Approach encoder & distance | PASSED (10k fuzz) |
-| **Compression-Based** | `RleNcd` | `rlencd.rs` | Run-Length Encoding NCD | PASSED (10k fuzz) |
-| | `ArithNcd` | `arith_ncd.rs` | Arithmetic Coding NCD (CPython frexp log) | PASSED (10k fuzz) |
-| | `SqrtNCD` | `sqrt_ncd.rs` | Square-Root Based NCD ($\sum \sqrt{\text{cnt}}$) | PASSED (10k fuzz) |
-| | `SmithWaterman` | `smith_waterman.rs` | Local alignment (Smith–Waterman) | PASSED (10k fuzz) |
-| | `NeedlemanWunsch` | `needleman_wunsch.rs` | Global alignment (Needleman–Wunsch) | PASSED (10k fuzz) |
-| | `LcsSeq` | `lcsseq.rs` | Longest common subsequence similarity | PASSED (10k fuzz) |
-| | `LcsStr` | `lcsstr.rs` | Longest common substring similarity | PASSED (10k fuzz) |
-| | `RatcliffObershelp` | `ratcliff_obershelp.rs` | Ratcliff/Obershelp similarity | PASSED (10k fuzz) |
-| | `Mlipns` | `mlipns.rs` | Mlipns similarity metric | PASSED (10k fuzz) |
-| | `Gotoh` | `gotoh.rs` | Gotoh alignment with gap open/ext (edge-case handling) | PASSED (10k fuzz) |
-
-> **Note on MongeElkan**: `MongeElkan` was deliberately scoped out and documented in [`DECISIONS.md`](decisions.md) because its reference implementation in Python contains an upstream bug (`self.algorithm.maximum(sequences)` passing an unstarred tuple).
-
----
-
-## Containerized Setup (Docker & Docker Compose)
-
-The repository provides a complete Docker environment with pre-configured Rust and Python toolchains.
-
-### 1. Build Docker Image
-```bash
-docker build -t textdistancerust:latest .
+```
+Usage: cargo run --bin tdcli <COMMAND> [ARGS...]
 ```
 
-### 2. Run Commands with Docker Compose
-- **Run Unit Tests**:
-  ```bash
-  docker compose run --rm test
-  ```
-- **Run Differential Fuzzing**:
-  ```bash
-  docker compose run --rm fuzz python3 fuzz-harness/fuzz_driver.py --alg hamming --iterations 10000
-  ```
-- **Run Performance Benchmarks**:
-  ```bash
-  docker compose run --rm benchmark
-  ```
-- **Run Interactive JSON-IPC CLI**:
-  ```bash
-  docker compose run --rm -i cli
-  ```
+### Commands
+
+| Command | Description | Example |
+| :--- | :--- | :--- |
+| `list` | Lists all 30 algorithms grouped by category | `cargo run --bin tdcli list` |
+| `compare` | Compares two strings using specified algorithm(s) | `cargo run --bin tdcli compare --alg levenshtein,jaccard "kitten" "sitting"` |
+| `all` | Runs all 30 algorithms and displays a ranked comparison table | `cargo run --bin tdcli all "MARTHA" "MARHTA"` |
+| `bench` | Runs in-process microsecond latency benchmarks | `cargo run --bin tdcli bench` |
+| `interactive` | Launches an interactive REPL session | `cargo run --bin tdcli interactive` |
 
 ---
 
-## Local Building and Verification
+## Summary of Algorithms
+
+| Category | Algorithm | Rust Module | Description | Trait | Fuzz Status |
+| :--- | :--- | :--- | :--- | :--- | :--- |
+| **Simple** | `Identity` | [`identity.rs`](file:///d:/my%20study/Project/Text_Distance_Rust/textdistancerust/src/identity.rs) | Exact sequence identity | `SimilarityMetric` | PASSED (10k) |
+| | `Length` | [`length.rs`](file:///d:/my%20study/Project/Text_Distance_Rust/textdistancerust/src/length.rs) | Length difference metric | `DistanceMetric` | PASSED (10k) |
+| | `Prefix` | [`prefix.rs`](file:///d:/my%20study/Project/Text_Distance_Rust/textdistancerust/src/prefix.rs) | Common prefix fraction | `SimilarityMetric` | PASSED (10k) |
+| | `Postfix` | [`postfix.rs`](file:///d:/my%20study/Project/Text_Distance_Rust/textdistancerust/src/postfix.rs) | Common postfix fraction | `SimilarityMetric` | PASSED (10k) |
+| **Matrix** | `Matrix` | [`matrix.rs`](file:///d:/my%20study/Project/Text_Distance_Rust/textdistancerust/src/matrix.rs) | Custom score matrix matching | `SimilarityMetric` | PASSED (10k) |
+| **Edit** | `Hamming` | [`hamming.rs`](file:///d:/my%20study/Project/Text_Distance_Rust/textdistancerust/src/hamming.rs) | Positional mismatch count | `DistanceMetric` | PASSED (10k) |
+| | `Levenshtein` | [`levenshtein.rs`](file:///d:/my%20study/Project/Text_Distance_Rust/textdistancerust/src/levenshtein.rs) | Minimum edit distance (ins/del/sub) | `DistanceMetric` | PASSED (10k) |
+| | `DamerauLevenshtein` | [`damerau_levenshtein.rs`](file:///d:/my%20study/Project/Text_Distance_Rust/textdistancerust/src/damerau_levenshtein.rs) | OSA edit distance with transpositions | Both traits | PASSED (10k) |
+| | `Jaro` | [`jaro.rs`](file:///d:/my%20study/Project/Text_Distance_Rust/textdistancerust/src/jaro.rs) | Jaro character-window metric | `SimilarityMetric` | PASSED (10k) |
+| | `JaroWinkler` | [`jaro_winkler.rs`](file:///d:/my%20study/Project/Text_Distance_Rust/textdistancerust/src/jaro_winkler.rs) | Jaro with prefix scaling | `SimilarityMetric` | PASSED (10k) |
+| | `StrCmp95` | [`strcmp95.rs`](file:///d:/my%20study/Project/Text_Distance_Rust/textdistancerust/src/strcmp95.rs) | Jaro-Winkler strcmp95 phonetic variant | `SimilarityMetric` | PASSED (10k) |
+| | `Mlipns` | [`mlipns.rs`](file:///d:/my%20study/Project/Text_Distance_Rust/textdistancerust/src/mlipns.rs) | Bounded mismatch iterative metric | `SimilarityMetric` | PASSED (10k) |
+| **Alignment** | `NeedlemanWunsch` | [`needleman_wunsch.rs`](file:///d:/my%20study/Project/Text_Distance_Rust/textdistancerust/src/needleman_wunsch.rs) | Global sequence alignment | `SimilarityMetric` | PASSED (10k) |
+| | `SmithWaterman` | [`smith_waterman.rs`](file:///d:/my%20study/Project/Text_Distance_Rust/textdistancerust/src/smith_waterman.rs) | Local sequence alignment | `SimilarityMetric` | PASSED (10k) |
+| | `Gotoh` | [`gotoh.rs`](file:///d:/my%20study/Project/Text_Distance_Rust/textdistancerust/src/gotoh.rs) | Alignment with affine gap penalties | `SimilarityMetric` | PASSED (10k) |
+| **Sequence** | `LcsSeq` | [`lcsseq.rs`](file:///d:/my%20study/Project/Text_Distance_Rust/textdistancerust/src/lcsseq.rs) | Longest common subsequence | `SimilarityMetric` | PASSED (10k) |
+| | `LcsStr` | [`lcsstr.rs`](file:///d:/my%20study/Project/Text_Distance_Rust/textdistancerust/src/lcsstr.rs) | Longest common substring | `SimilarityMetric` | PASSED (10k) |
+| | `RatcliffObershelp` | [`ratcliff_obershelp.rs`](file:///d:/my%20study/Project/Text_Distance_Rust/textdistancerust/src/ratcliff_obershelp.rs) | Gestalt pattern matching | `SimilarityMetric` | PASSED (10k) |
+| **Token** | `Jaccard` | [`jaccard.rs`](file:///d:/my%20study/Project/Text_Distance_Rust/textdistancerust/src/jaccard.rs) | Jaccard multiset / set similarity | `SimilarityMetric` | PASSED (10k) |
+| | `Overlap` | [`overlap.rs`](file:///d:/my%20study/Project/Text_Distance_Rust/textdistancerust/src/overlap.rs) | Overlap coefficient | `SimilarityMetric` | PASSED (10k) |
+| | `Cosine` | [`cosine.rs`](file:///d:/my%20study/Project/Text_Distance_Rust/textdistancerust/src/cosine.rs) | Cosine / Ochiai coefficient | `SimilarityMetric` | PASSED (10k) |
+| | `Tanimoto` | [`tanimoto.rs`](file:///d:/my%20study/Project/Text_Distance_Rust/textdistancerust/src/tanimoto.rs) | Logarithmic Tanimoto similarity | `SimilarityMetric` | PASSED (10k) |
+| | `Sorensen` | [`sorensen.rs`](file:///d:/my%20study/Project/Text_Distance_Rust/textdistancerust/src/sorensen.rs) | Sorensen-Dice coefficient | `SimilarityMetric` | PASSED (10k) |
+| | `Tversky` | [`tversky.rs`](file:///d:/my%20study/Project/Text_Distance_Rust/textdistancerust/src/tversky.rs) | Asymmetric Tversky index | `SimilarityMetric` | PASSED (10k) |
+| | `Bag` | [`bag.rs`](file:///d:/my%20study/Project/Text_Distance_Rust/textdistancerust/src/bag.rs) | Multiset difference distance | `DistanceMetric` | PASSED (10k) |
+| **Phonetic** | `MRA` | [`mra.rs`](file:///d:/my%20study/Project/Text_Distance_Rust/textdistancerust/src/mra.rs) | Match Rating Approach | `SimilarityMetric` | PASSED (10k) |
+| | `Editex` | [`editex.rs`](file:///d:/my%20study/Project/Text_Distance_Rust/textdistancerust/src/editex.rs) | Phonetic-group Editex distance | `DistanceMetric` | PASSED (10k) |
+| **Compression** | `RleNcd` | [`rlencd.rs`](file:///d:/my%20study/Project/Text_Distance_Rust/textdistancerust/src/rlencd.rs) | Run-Length Encoding NCD | `SimilarityMetric` | PASSED (10k) |
+| | `ArithNcd` | [`arith_ncd.rs`](file:///d:/my%20study/Project/Text_Distance_Rust/textdistancerust/src/arith_ncd.rs) | Arithmetic Coding NCD | `SimilarityMetric` | PASSED (10k) |
+| | `SqrtNCD` | [`sqrt_ncd.rs`](file:///d:/my%20study/Project/Text_Distance_Rust/textdistancerust/src/sqrt_ncd.rs) | Square-Root NCD | `SimilarityMetric` | PASSED (10k) |
+
+---
+
+## Local Building & Testing
 
 ### 1. Build the Rust Crate
 ```bash
@@ -106,58 +105,78 @@ cd textdistancerust
 cargo build --release
 ```
 
-### 2. Run Unit Tests
+### 2. Run the Test Suite (89 Tests)
 ```bash
 cargo test
 ```
-
-### 3. Code Quality & Format Checks
-```bash
-cargo fmt -- --check
-cargo clippy --all-targets
-```
+*Executes 60 unit tests and 29 known-value integration tests.*
 
 ---
 
 ## Differential Fuzz Harness
 
-The project includes a Python Hypothesis differential fuzz harness (`fuzz-harness/fuzz_driver.py`) that streams randomized test inputs to `textdistancerust-cli` via JSON-IPC over persistent stdin/stdout pipes, comparing outputs with Python `textdistance`.
+The project includes a Python Hypothesis differential fuzz harness ([`fuzz-harness/fuzz_driver.py`](file:///d:/my%20study/Project/Text_Distance_Rust/fuzz-harness/fuzz_driver.py)) that streams randomized inputs to `textdistancerust-cli` via JSON-IPC over stdin/stdout.
 
-To execute differential fuzzing locally:
+To execute differential fuzzing:
 ```bash
-python fuzz-harness/fuzz_driver.py --alg <alg_name> --iterations 10000
+python fuzz-harness/fuzz_driver.py --alg hamming,jaccard,damerau_levenshtein --iterations 10000
 ```
 
 ---
 
-## Project Structure
+## Docker Setup
+
+A Docker environment with pre-installed Rust and Python toolchains is provided:
+
+```bash
+# Build Docker image
+docker build -t textdistancerust:latest .
+
+# Run tests in Docker
+docker compose run --rm test
+
+# Run differential fuzzing in Docker
+docker compose run --rm fuzz python3 fuzz-harness/fuzz_driver.py --alg hamming --iterations 1000
+
+# Run benchmarks in Docker
+docker compose run --rm benchmark
+```
+
+---
+
+## Repository Structure
 
 ```text
 .
-├── Dockerfile                  # Unified Rust + Python Docker image
-├── docker-compose.yml          # Services: test, fuzz, benchmark, cli
-├── requirements.txt            # Python dependencies (textdistance, hypothesis)
-├── .dockerignore               # Docker context exclusion rules
-├── textdistancerust/           # Rust Crate
+├── Dockerfile                      # Dual Rust+Python Docker image
+├── docker-compose.yml              # Container services (test, fuzz, benchmark, cli)
+├── requirements.txt                # Python dependencies (textdistance, hypothesis)
+├── .dockerignore                   # Docker context rules
+├── benchmark.py                    # Python vs Rust benchmark script
+├── textdistancerust/               # Rust Crate
 │   ├── Cargo.toml
 │   └── src/
-│       ├── lib.rs              # Library re-exports (all 20 algorithms)
-│       ├── main.rs             # Persistent JSON-IPC CLI binary
-│       ├── traits.rs           # Generic DistanceMetric & SimilarityMetric traits
-│       ├── tokenizer.rs        # Char, word, and n-gram tokenization
-│       └── *.rs                # Individual algorithm implementations
+│       ├── lib.rs                  # Public library API re-exports
+│       ├── main.rs                 # Persistent JSON-IPC CLI binary
+│       ├── traits.rs               # DistanceMetric & SimilarityMetric traits
+│       ├── tokenizer.rs            # Char, word, and n-gram tokenization
+│       ├── bin/
+│       │   ├── tdcli.rs            # Interactive CUI binary
+│       │   ├── bench_native.rs     # Native benchmark binary
+│       │   └── integration_tests.rs# 29 known-value integration tests
+│       └── *.rs                    # Individual algorithm implementations
 ├── fuzz-harness/
-│   └── fuzz_driver.py          # Differential fuzz harness (Hypothesis)
+│   └── fuzz_driver.py              # Differential fuzz harness (Hypothesis)
 ├── artifacts/
-│   └── benchmark_report.md     # Performance benchmarks (Python vs Rust)
-├── README.md                   # Project documentation
-├── DECISIONS.md                # Architectural & parity decisions log
-├── PROJECT_RULES.md            # Hard constraints and engineering guidelines
-└── ROADMAP.md                  # Project milestones and task breakdown
+│   └── benchmark_report.md         # Generated latency benchmark report
+├── README.md                       # Project documentation
+├── DECISIONS.md                    # Parity decisions & scope log
+├── PROJECT_RULES.md                # Hard constraints and guidelines
+└── ROADMAP.md                      # Milestone breakdown
 ```
 
 ---
 
 ## License
 
-This project is open-source under the MIT License.
+This project is open-source under the [MIT License](LICENSE).
