@@ -1,0 +1,817 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Text Distance Rust — Interactive Presentation</title>
+<link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=VT323&family=Fira+Code:wght@400;600&family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+<style>
+:root {
+  --teal: #008080;
+  --grey: #c0c0c0;
+  --dgrey: #808080;
+  --lgrey: #dfdfdf;
+  --blue: #000080;
+  --lblue: #1084d0;
+  --yellow: #ffff80;
+  --blight: #ffffff;
+  --bdark: #404040;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  background: var(--teal);
+  font-family: 'Inter', sans-serif;
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  color: #000;
+}
+
+/* Desktop icons */
+.icons {
+  position: absolute;
+  top: 18px;
+  left: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  z-index: 1;
+}
+.icon {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  color: #fff;
+  font-family: 'VT323', monospace;
+  font-size: 18px;
+  text-shadow: 1px 1px 2px #000;
+  cursor: pointer;
+  width: 80px;
+  padding: 6px 4px;
+  text-align: center;
+}
+.icon:hover { background: rgba(255,255,255,0.2); outline: 1px dashed #fff; }
+.icon-em { font-size: 30px; }
+
+/* Main window */
+.stage {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  z-index: 10;
+}
+.win {
+  background: var(--grey);
+  border: 3px solid;
+  border-color: var(--blight) var(--bdark) var(--bdark) var(--blight);
+  box-shadow: 6px 6px 18px rgba(0,0,0,0.45);
+  width: 1060px;
+  max-width: 96vw;
+  height: 630px;
+  max-height: 86vh;
+  display: flex;
+  flex-direction: column;
+}
+.titlebar {
+  background: linear-gradient(90deg, var(--blue), var(--lblue));
+  color: #fff;
+  padding: 5px 10px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-family: 'VT323', monospace;
+  font-size: 20px;
+  letter-spacing: 1px;
+  flex-shrink: 0;
+}
+.tbcontrols { display: flex; gap: 4px; }
+.wbtn {
+  width: 20px; height: 20px;
+  background: var(--grey);
+  border: 2px solid; border-color: var(--blight) var(--bdark) var(--bdark) var(--blight);
+  font-size: 12px; font-weight: bold;
+  display: flex; align-items: center; justify-content: center;
+  cursor: pointer;
+}
+.wbtn:active { border-color: var(--bdark) var(--blight) var(--blight) var(--bdark); }
+
+.body {
+  flex: 1;
+  background: #fff;
+  border: 2px inset var(--dgrey);
+  margin: 7px;
+  padding: 22px;
+  overflow-y: auto;
+}
+
+/* Taskbar */
+.taskbar {
+  height: 40px;
+  background: var(--grey);
+  border-top: 2px solid var(--blight);
+  display: flex;
+  align-items: center;
+  padding: 2px 6px;
+  gap: 6px;
+  z-index: 100;
+  position: relative;
+}
+.startbtn {
+  height: 30px; padding: 0 12px;
+  background: var(--grey);
+  border: 2px solid; border-color: var(--blight) var(--bdark) var(--bdark) var(--blight);
+  font-family: 'Press Start 2P', cursive; font-size: 10px;
+  display: flex; align-items: center; gap: 6px; cursor: pointer;
+}
+.startbtn:active { border-color: var(--bdark) var(--blight) var(--blight) var(--bdark); }
+.tasktabs { flex: 1; display: flex; gap: 4px; }
+.ttab {
+  height: 30px; padding: 0 12px;
+  background: var(--grey);
+  border: 2px solid; border-color: var(--bdark) var(--blight) var(--blight) var(--bdark);
+  font-family: 'VT323', monospace; font-size: 18px;
+  display: flex; align-items: center;
+}
+.clock {
+  height: 30px; padding: 0 12px;
+  border: 2px inset var(--dgrey);
+  font-family: 'VT323', monospace; font-size: 20px;
+  display: flex; align-items: center;
+}
+
+/* Start menu */
+.startmenu {
+  position: absolute; bottom: 40px; left: 4px;
+  width: 250px; display: none; flex-direction: column;
+  background: var(--grey);
+  border: 3px solid; border-color: var(--blight) var(--bdark) var(--bdark) var(--blight);
+  box-shadow: 4px 4px 12px rgba(0,0,0,0.5);
+  z-index: 200;
+}
+.smheader {
+  background: linear-gradient(0deg, var(--blue), var(--lblue));
+  color: #fff; padding: 10px 8px;
+  font-family: 'Press Start 2P', cursive; font-size: 10px;
+  writing-mode: vertical-rl; transform: rotate(180deg);
+  width: 32px; display: flex; align-items: center;
+}
+.smbody { flex: 1; display: flex; flex-direction: column; padding: 4px; }
+.smitem {
+  padding: 7px 10px; font-family: 'VT323', monospace; font-size: 20px;
+  display: flex; align-items: center; gap: 8px; cursor: pointer;
+}
+.smitem:hover { background: var(--blue); color: #fff; }
+
+/* Slide elements */
+.slide-title {
+  font-family: 'Press Start 2P', cursive;
+  font-size: 20px; color: var(--blue); margin-bottom: 10px; line-height: 1.3;
+}
+.slide-sub {
+  font-family: 'VT323', monospace; font-size: 24px; color: #444;
+  margin-bottom: 14px; border-bottom: 2px solid var(--grey); padding-bottom: 6px;
+}
+.pxtext { font-family: 'VT323', monospace; }
+.badge {
+  background: var(--blue); color: #fff;
+  padding: 3px 9px; font-family: 'VT323', monospace; font-size: 18px;
+  border: 1px solid #000;
+}
+.badges { display: flex; gap: 7px; flex-wrap: wrap; margin-bottom: 16px; }
+.rbox {
+  background: var(--grey);
+  border: 2px solid; border-color: var(--blight) var(--bdark) var(--bdark) var(--blight);
+  padding: 14px; margin-top: 10px;
+}
+.g2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+.g3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; }
+.g4 { display: grid; grid-template-columns: 1fr 1fr 1fr 1fr; gap: 10px; }
+.tlist {
+  font-family: 'Fira Code', monospace; font-size: 12px;
+  background: #000; color: #00ff00; padding: 12px;
+  overflow: auto; line-height: 1.4; max-height: 380px; white-space: pre;
+}
+table.rt { width: 100%; border-collapse: collapse; font-family: 'Fira Code', monospace; font-size: 13px; }
+table.rt th { background: var(--blue); color: #fff; padding: 7px; text-align: left; }
+table.rt td { padding: 5px 7px; border-bottom: 1px solid #ddd; }
+table.rt tr:nth-child(even) { background: #f8f8f8; }
+.nav {
+  display: flex; justify-content: space-between; align-items: center;
+  margin-top: 16px; padding-top: 10px; border-top: 2px solid var(--grey);
+}
+.nbtn {
+  padding: 5px 16px; background: var(--grey);
+  border: 2px solid; border-color: var(--blight) var(--bdark) var(--bdark) var(--blight);
+  font-family: 'VT323', monospace; font-size: 20px; cursor: pointer;
+}
+.nbtn:hover { background: var(--lgrey); }
+.nbtn:active { border-color: var(--bdark) var(--blight) var(--blight) var(--bdark); }
+.nbtn:disabled { opacity: 0.3; cursor: not-allowed; }
+.sselect {
+  font-family: 'VT323', monospace; font-size: 19px;
+  padding: 3px 7px; background: var(--grey); border: 2px inset var(--dgrey);
+}
+.calc-inp {
+  width: 100%; padding: 7px 10px; font-family: 'Fira Code', monospace; font-size: 14px;
+  border: 2px inset var(--dgrey); background: #fff; margin-top: 4px;
+}
+.calc-sel {
+  width: 100%; padding: 7px; font-family: 'Fira Code', monospace; font-size: 14px;
+  border: 2px inset var(--dgrey); background: #fff; margin-top: 4px;
+}
+.notes-panel {
+  background: var(--yellow); border: 2px solid var(--bdark);
+  padding: 10px; margin-top: 10px; font-size: 13px; line-height: 1.5;
+}
+
+/* Slide templates stored as hidden divs */
+.slide-template { display: none; }
+</style>
+</head>
+<body>
+
+<!-- Desktop icons -->
+<div class="icons">
+  <div class="icon" onclick="goTo(0)"><div class="icon-em">💻</div>Title</div>
+  <div class="icon" onclick="goTo(1)"><div class="icon-em">📁</div>Algorithms</div>
+  <div class="icon" onclick="goTo(7)"><div class="icon-em">⚡</div>Live Calc</div>
+  <div class="icon" onclick="goTo(4)"><div class="icon-em">📊</div>Benchmarks</div>
+</div>
+
+<!-- Slide templates (no JS string issues) -->
+<div id="tpl-0" class="slide-template">
+  <div class="badges">
+    <span class="badge">100% Behavioral Parity</span>
+    <span class="badge">30 Algorithms</span>
+    <span class="badge">#![forbid(unsafe_code)]</span>
+    <span class="badge">Docker Ready</span>
+    <span class="badge">89 Tests Passing</span>
+  </div>
+  <div class="rbox">
+    <div class="pxtext" style="font-size:26px;color:var(--blue);font-family:'VT323',monospace;">
+      High-Performance, Safe Rust Reimplementation of Python's textdistance Library
+    </div>
+    <p style="margin-top:10px;color:#444;font-size:15px;">
+      Delivering exact mathematical equivalence down to 10<sup>-9</sup> floating-point precision, backed by 10,000+ iteration differential fuzz testing per algorithm with zero mismatches.
+    </p>
+  </div>
+  <div style="margin-top:20px;font-family:'VT323',monospace;font-size:22px;color:#666;">
+    Presented by: Siddhi Mankar &amp; Team &nbsp;|&nbsp; Project: Text_Distance_Rust &nbsp;|&nbsp; Rust 1.82
+  </div>
+</div>
+
+<div id="tpl-1" class="slide-template">
+  <div class="g2">
+    <div class="tlist">edit/
+├── hamming         (Positional mismatch count)
+├── levenshtein     (Classic edit distance)
+├── damerau_lev     (OSA + transpositions)
+├── jaro            (Character-window similarity)
+├── jaro_winkler    (Jaro + prefix scaling bonus)
+├── strcmp95        (Phonetic Jaro-Winkler variant)
+└── mlipns          (Bounded mismatch metric)
+
+token/
+├── jaccard         (Multiset / set similarity)
+├── sorensen        (Sorensen-Dice coefficient)
+├── tversky         (Asymmetric Tversky index)
+├── overlap         (Overlap coefficient)
+├── tanimoto        (Logarithmic similarity)
+├── cosine          (Cosine / Ochiai coefficient)
+└── bag             (Multiset difference distance)</div>
+    <div class="tlist">sequence/
+├── lcsseq          (Longest common subsequence)
+├── lcsstr          (Longest common substring)
+└── ratcliff        (Gestalt pattern matching)
+
+alignment/
+├── needleman_wunsch (Global sequence alignment)
+├── smith_waterman  (Local sequence alignment)
+└── gotoh           (Global + affine gap penalties)
+
+phonetic/
+├── mra             (Match Rating Approach)
+└── editex          (Phonetic-group edit distance)
+
+compression/
+├── arith_ncd       (Arithmetic Coding NCD)
+├── rle_ncd         (Run-Length Encoding NCD)
+└── sqrt_ncd        (Square-Root NCD)
+
+simple/
+├── prefix / postfix / length / identity / matrix</div>
+  </div>
+</div>
+
+<div id="tpl-2" class="slide-template">
+  <div class="g3">
+    <div class="rbox">
+      <div class="pxtext" style="font-size:22px;color:var(--blue);">1. Performance</div>
+      <p style="font-size:14px;margin-top:8px;">Python execution bottlenecks on large benchmarks. <code>editex</code> takes 831 µs per call in Python vs 26 µs natively in Rust — a 31× speedup.</p>
+    </div>
+    <div class="rbox">
+      <div class="pxtext" style="font-size:22px;color:var(--blue);">2. Memory Safety</div>
+      <p style="font-size:14px;margin-top:8px;">Python/C byte slicing risks UTF-8 boundary panics on CJK, Emojis, and multi-byte token vectors. Rust eliminates this entirely.</p>
+    </div>
+    <div class="rbox">
+      <div class="pxtext" style="font-size:22px;color:var(--blue);">3. Type Safety</div>
+      <p style="font-size:14px;margin-top:8px;">Rust's generic <code>&amp;[T]</code> slices enforce correctness at compile time — no silent zero-division or tuple unpacking bugs like Python's MongeElkan upstream issue.</p>
+    </div>
+  </div>
+</div>
+
+<div id="tpl-3" class="slide-template">
+  <ul style="line-height:2.1;font-size:16px;padding-left:20px;">
+    <li>🛡️ <strong>Zero Unsafe Code</strong>: <code>#![forbid(unsafe_code)]</code> enforced at compile time — no unsafe blocks, no raw pointers.</li>
+    <li>🧩 <strong>Generic Sequences &amp;[T]</strong>: Algorithms operate over <code>&amp;[char]</code> / <code>Vec&lt;&amp;str&gt;</code> token slices. Prevents UTF-8 panics.</li>
+    <li>⚙️ <strong>Dual Trait System</strong>: <code>DistanceMetric&lt;T&gt;</code> and <code>SimilarityMetric&lt;T&gt;</code> auto-derive 4 metrics from 1 implementation.</li>
+    <li>🔄 <strong>Persistent JSON-IPC CLI</strong>: <code>textdistancerust-cli</code> streams JSON over stdin/stdout for high-volume differential fuzzing.</li>
+    <li>🎨 <strong>Interactive CUI (<code>tdcli</code>)</strong>: Native terminal UI with box-drawing tables, emoji category tags, and visual bars.</li>
+    <li>🐳 <strong>Docker Containerized</strong>: Single multi-toolchain image with Rust 1.82 + Python 3.11 — ready for CI/CD.</li>
+  </ul>
+</div>
+
+<div id="tpl-4" class="slide-template">
+  <table class="rt">
+    <thead>
+      <tr><th>Algorithm</th><th>Python (µs)</th><th>Rust IPC (µs)</th><th>Rust Native (µs)</th><th>Native Speedup</th></tr>
+    </thead>
+    <tbody>
+      <tr><td><code>editex</code></td><td>831.72</td><td>167.56</td><td><strong>26.65</strong></td><td><span class="badge">31.2× 🚀</span></td></tr>
+      <tr><td><code>damerau_levenshtein</code></td><td>108.79</td><td>46.75</td><td><strong>0.99</strong></td><td><span class="badge">109.8× 🚀</span></td></tr>
+      <tr><td><code>mra</code></td><td>6.95</td><td>46.14</td><td><strong>1.52</strong></td><td><span class="badge">4.57× 🚀</span></td></tr>
+      <tr><td><code>strcmp95</code></td><td>10.16</td><td>43.30</td><td><strong>0.64</strong></td><td><span class="badge">15.8× 🚀</span></td></tr>
+      <tr><td><code>jaccard</code></td><td>7.06</td><td>46.44</td><td><strong>1.03</strong></td><td><span class="badge">6.85× 🚀</span></td></tr>
+      <tr><td><code>hamming</code></td><td>5.44</td><td>41.38</td><td><strong>0.003</strong></td><td><span class="badge">1800× 🚀</span></td></tr>
+      <tr><td><code>levenshtein</code></td><td>12.30</td><td>43.80</td><td><strong>0.45</strong></td><td><span class="badge">27.3× 🚀</span></td></tr>
+    </tbody>
+  </table>
+  <p style="margin-top:10px;font-size:13px;color:#555;">Note: IPC overhead ~40µs per call from stdin/stdout pipes; native in-process calls eliminate pipe overhead entirely.</p>
+</div>
+
+<div id="tpl-5" class="slide-template">
+  <div class="g3">
+    <div class="rbox">
+      <div class="pxtext" style="font-size:22px;">1. Differential Fuzzing</div>
+      <p style="font-size:13px;margin-top:6px;">Python Hypothesis generates 10,000+ random Unicode string pairs per algorithm and compares Rust JSON-IPC output vs Python textdistance. <strong>0 mismatches</strong> across all 30 algorithms.</p>
+    </div>
+    <div class="rbox">
+      <div class="pxtext" style="font-size:22px;">2. Test Suite (89 Tests)</div>
+      <p style="font-size:13px;margin-top:6px;"><strong>60 unit tests</strong> verify individual algorithm edge cases. <strong>29 known-value integration tests</strong> assert exact results to 10<sup>-7</sup> tolerance for all 30 algorithms.</p>
+    </div>
+    <div class="rbox">
+      <div class="pxtext" style="font-size:22px;">3. Docker + CI</div>
+      <p style="font-size:13px;margin-top:6px;">Multi-stage Docker image: rust:1.82 + Python 3.11. Docker Compose services: <code>test</code>, <code>fuzz</code>, <code>benchmark</code>, <code>cli</code>. Reproducible builds across environments.</p>
+    </div>
+  </div>
+</div>
+
+<div id="tpl-6" class="slide-template">
+  <div class="tlist">$ cargo run --bin tdcli list
+╔════════════════════════════════════════════╗
+║  📏  textdistancerust  tdcli  v0.1.0      ║
+╚════════════════════════════════════════════╝
+▶ Available Algorithms (30 total)
+  ── Simple ──
+  🔹  identity      prefix      postfix     length      matrix
+  ── Edit ──
+  📐  hamming       levenshtein damerau_lev jaro        jaro_winkler
+  📐  strcmp95       mlipns
+  ── Alignment ──
+  🧬  needleman_wunsch  smith_waterman  gotoh
+  ── Sequence ──
+  🔗  lcsseq        lcsstr      ratcliff_obershelp
+  ── Token ──
+  🎯  jaccard       overlap     cosine      tanimoto    sorensen    tversky  bag
+  ── Phonetic ──
+  🔤  mra           editex
+  ── Compression ──
+  📦  rle_ncd       arith_ncd   sqrt_ncd
+
+$ cargo run --bin tdcli compare --alg levenshtein,jaccard,cosine "kitten" "sitting"
+
+Algorithm               │ Norm.Sim   │ Norm.Dist  │ Visual
+──────────────────────────────────────────────────────────
+📐 levenshtein           │ 0.571429   │ 0.428571   │ [███████████░░░░░░░░░] 57%
+🎯 jaccard               │ 0.444444   │ 0.555556   │ [█████████░░░░░░░░░░░] 44%
+🎯 cosine                │ 0.617213   │ 0.382787   │ [████████████░░░░░░░░] 62%</div>
+</div>
+
+<div id="tpl-7" class="slide-template">
+  <div class="g2">
+    <div>
+      <label class="pxtext" style="font-size:20px;">String 1 (s1):</label>
+      <input type="text" id="ls1" class="calc-inp" value="kitten">
+      <label class="pxtext" style="font-size:20px;margin-top:10px;display:block;">String 2 (s2):</label>
+      <input type="text" id="ls2" class="calc-inp" value="sitting">
+      <label class="pxtext" style="font-size:20px;margin-top:10px;display:block;">Algorithm:</label>
+      <select id="lalg" class="calc-sel">
+        <option value="levenshtein">Levenshtein (Edit Distance)</option>
+        <option value="hamming">Hamming (Positional Mismatch)</option>
+        <option value="jaccard">Jaccard (Set Similarity)</option>
+        <option value="cosine">Cosine / Ochiai</option>
+        <option value="jaro_winkler">Jaro-Winkler</option>
+        <option value="lcsseq">LCS Sequence</option>
+        <option value="prefix">Prefix Match</option>
+      </select>
+      <button onclick="runCalc()" class="nbtn" style="margin-top:12px;width:100%;font-size:22px;">▶ Compute</button>
+    </div>
+    <div class="rbox" id="calc-out">
+      <div class="pxtext" style="font-size:22px;color:var(--blue);">Results will appear here</div>
+      <p style="margin-top:8px;font-size:14px;">Type any two strings and click Compute to see live results.</p>
+    </div>
+  </div>
+</div>
+
+<div id="tpl-8" class="slide-template">
+  <div class="g4">
+    <div class="rbox" style="text-align:center;">
+      <div style="font-size:44px;font-family:'VT323',monospace;color:var(--blue);">100%</div>
+      <div class="pxtext" style="font-size:22px;">Behavioral Parity</div>
+    </div>
+    <div class="rbox" style="text-align:center;">
+      <div style="font-size:44px;font-family:'VT323',monospace;color:var(--blue);">30</div>
+      <div class="pxtext" style="font-size:22px;">Algorithms</div>
+    </div>
+    <div class="rbox" style="text-align:center;">
+      <div style="font-size:44px;font-family:'VT323',monospace;color:var(--blue);">89</div>
+      <div class="pxtext" style="font-size:22px;">Tests Passing</div>
+    </div>
+    <div class="rbox" style="text-align:center;">
+      <div style="font-size:44px;font-family:'VT323',monospace;color:var(--blue);">0</div>
+      <div class="pxtext" style="font-size:22px;">Unsafe Blocks</div>
+    </div>
+  </div>
+  <div class="rbox" style="margin-top:14px;">
+    <div class="pxtext" style="font-size:20px;color:var(--blue);">Fuzz Coverage</div>
+    <p style="font-size:14px;margin-top:8px;">10,000+ Hypothesis iterations × 30 algorithms = 300,000+ randomized test cases, all passing with 0 mismatches against the Python reference.</p>
+  </div>
+</div>
+
+<div id="tpl-9" class="slide-template">
+  <table class="rt">
+    <thead>
+      <tr><th>Category</th><th>Algorithms</th><th>Trait</th><th>Fuzz</th><th>Parity</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>Simple</td><td><code>Identity, Length, Prefix, Postfix, Matrix</code></td><td>Both</td><td>10k ✓</td><td>100%</td></tr>
+      <tr><td>Edit</td><td><code>Hamming, Levenshtein, DamerauLevenshtein</code></td><td>DistanceMetric</td><td>10k ✓</td><td>100%</td></tr>
+      <tr><td>Edit</td><td><code>Jaro, JaroWinkler, StrCmp95, Mlipns</code></td><td>SimilarityMetric</td><td>10k ✓</td><td>100%</td></tr>
+      <tr><td>Alignment</td><td><code>NeedlemanWunsch, SmithWaterman, Gotoh</code></td><td>SimilarityMetric</td><td>10k ✓</td><td>100%</td></tr>
+      <tr><td>Sequence</td><td><code>LcsSeq, LcsStr, RatcliffObershelp</code></td><td>SimilarityMetric</td><td>10k ✓</td><td>100%</td></tr>
+      <tr><td>Token</td><td><code>Jaccard, Overlap, Cosine, Tanimoto, Sorensen, Tversky, Bag</code></td><td>SimilarityMetric</td><td>10k ✓</td><td>100%</td></tr>
+      <tr><td>Phonetic</td><td><code>MRA, Editex</code></td><td>Both</td><td>10k ✓</td><td>100%</td></tr>
+      <tr><td>Compression</td><td><code>RleNcd, ArithNcd, SqrtNcd</code></td><td>SimilarityMetric</td><td>10k ✓</td><td>100%</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<div id="tpl-10" class="slide-template">
+  <div class="tlist">     Generic Input &amp;[T]  (chars, words, n-grams)
+              |
+       Tokenizer Module
+  (to_char_vec / to_word_vec / find_ngrams)
+              |
+    ┌─────────┴──────────┐
+    │                    │
+DistanceMetric&lt;T&gt;    SimilarityMetric&lt;T&gt;
+  .distance()          .similarity()
+  .maximum()           .maximum()
+  .similarity()  ──▶  .distance()
+  .normalized_*        .normalized_*
+    │                    │
+    └─────────┬──────────┘
+              │
+   ┌──────────┼──────────┐
+   │          │          │
+lib.rs    tdcli.rs   main.rs (JSON-IPC)
+(crate)   (CUI)      (Fuzzing Engine)
+   │          │          │
+Rust apps  cargo run  Python Hypothesis
+           --bin tdcli  fuzz_driver.py</div>
+</div>
+
+<div id="tpl-11" class="slide-template">
+  <div class="rbox" style="text-align:center;padding:20px;">
+    <div class="pxtext" style="font-size:30px;color:var(--blue);">Text_Distance_Rust — Complete &amp; Verified!</div>
+    <p style="margin-top:14px;font-size:16px;line-height:1.8;">
+      ✅ 30 Algorithms Ported &nbsp; ✅ 100% Python Parity &nbsp; ✅ 89 Tests Passing<br>
+      ✅ 0 Unsafe Blocks &nbsp; ✅ Docker Containerized &nbsp; ✅ Interactive CUI
+    </p>
+    <div style="margin-top:16px;font-family:'Fira Code',monospace;font-size:13px;background:#000;color:#00ff00;padding:12px;text-align:left;">
+      cargo test            # run 89 tests<br>
+      cargo run --bin tdcli list          # interactive CLI<br>
+      cargo run --bin tdcli all "abc" "xyz"  # compare all algorithms<br>
+      docker compose run --rm test        # test in Docker
+    </div>
+  </div>
+  <div style="margin-top:20px;text-align:center;font-family:'VT323',monospace;font-size:32px;">
+    Thank you! Questions &amp; Discussion 👋
+  </div>
+</div>
+
+<!-- Main window markup -->
+<div class="stage">
+  <div class="win">
+    <div class="titlebar">
+      <span>💾 Text_Distance_Rust_Presentation.exe</span>
+      <div class="tbcontrols">
+        <div class="wbtn" onclick="toggleNotes()" title="Toggle speaker notes">📝</div>
+        <div class="wbtn" onclick="toggleFS()" title="Fullscreen">□</div>
+        <div class="wbtn" style="background:#d9534f;color:#fff;">✕</div>
+      </div>
+    </div>
+    <div class="body" id="body">
+      <!-- Slide content injected by JS -->
+    </div>
+  </div>
+</div>
+
+<!-- Start menu -->
+<div class="startmenu" id="startmenu">
+  <div style="display:flex;">
+    <div class="smheader">TEXT DIST</div>
+    <div class="smbody">
+      <div class="smitem" onclick="goTo(0)">🏠 Title Slide</div>
+      <div class="smitem" onclick="goTo(1)">📂 Algorithm Taxonomy</div>
+      <div class="smitem" onclick="goTo(2)">🎯 Problem &amp; Motivation</div>
+      <div class="smitem" onclick="goTo(4)">📊 Benchmarks</div>
+      <div class="smitem" onclick="goTo(7)">⚡ Live Calculator</div>
+      <div class="smitem" onclick="goTo(10)">🧬 Architecture</div>
+      <div class="smitem" onclick="goTo(11)">🎤 Conclusion</div>
+      <hr style="border-color:var(--dgrey);margin:4px 0;">
+      <div class="smitem" onclick="toggleNotes()">📝 Speaker Notes</div>
+      <div class="smitem" onclick="toggleFS()">🖥️ Fullscreen</div>
+    </div>
+  </div>
+</div>
+
+<!-- Taskbar -->
+<div class="taskbar">
+  <div class="startbtn" onclick="toggleMenu()">🍎 Start</div>
+  <div class="tasktabs"><div class="ttab" id="tabtitle">💾 Text Distance Rust</div></div>
+  <div class="clock" id="clk">--:--</div>
+</div>
+
+<script>
+var SLIDE_TITLES = [
+  "Text Distance Rust",
+  "Topics Covered — 30 Algorithms",
+  "Problem & Motivation",
+  "Architectural Innovations",
+  "Performance Benchmarks",
+  "Verification & QA",
+  "CUI Toolkit (tdcli)",
+  "Live Interactive Simulator",
+  "Key Metrics & Statistics",
+  "Algorithm Parity Matrix",
+  "System Architecture",
+  "Summary & Conclusion"
+];
+
+var SLIDE_SUBS = [
+  "Rust Implementation for textdistance",
+  "Full Algorithm Taxonomy (30 Algorithms Ported)",
+  "Why Port textdistance to Rust?",
+  "Core Engineering Principles",
+  "Python vs Rust IPC vs Rust Native",
+  "3 Pillars of Rigorous Testing",
+  "Interactive Command-Line Application",
+  "Test String Distances Live in Browser",
+  "Project Verification Achievements",
+  "Fuzzing & Integration Status Table",
+  "Data Flow & Crate Structure",
+  "Project Deliverables & Repository Status"
+];
+
+var SLIDE_NOTES = [
+  "Welcome! Today we present textdistancerust — a high-performance Rust port of Python's textdistance library with 100% mathematical parity.",
+  "We ported 30 algorithms across 7 categories: Edit, Token, Sequence, Alignment, Phonetic, Compression, and Simple.",
+  "Python's library faces performance bottlenecks and UTF-8 boundary risks. Rust solves this with zero-cost abstractions and compile-time safety.",
+  "Key innovations: zero unsafe policy, generic &[T] sequences, dual trait system, and JSON-IPC streaming for differential fuzzing.",
+  "Direct latency comparison shows up to 1800x speedup for simple algorithms, and 30x+ for complex dynamic programming metrics.",
+  "Three-layer QA: 10k Hypothesis fuzz iterations, 89 unit/integration tests, and Docker Compose containerization.",
+  "The tdcli binary provides a rich terminal UI with box-drawing tables, emoji tags, and visual similarity bars.",
+  "Try out any string pair and algorithm right here — the calculations are implemented in JavaScript for live demo.",
+  "Summary statistics: 100% equivalence, 30 algorithms, 89 tests, 0 unsafe blocks, 300k+ total fuzz test cases.",
+  "Every algorithm family has been fuzz-verified to 10k iterations with exact trait mapping and zero mismatches.",
+  "The crate architecture flows from generic &[T] slices through tokenizers into dual trait evaluators exported as lib, CLI, and IPC.",
+  "Thank you! The full repository is available with complete documentation, Docker support, and an interactive CLI."
+];
+
+var cur = 0;
+var showNotes = false;
+
+function goTo(idx) {
+  cur = idx;
+  document.getElementById("startmenu").style.display = "none";
+  render();
+}
+
+function render() {
+  var tpl = document.getElementById("tpl-" + cur);
+  var content = tpl ? tpl.innerHTML : "<p>Slide content not found.</p>";
+
+  var optHtml = "";
+  for (var i = 0; i < SLIDE_TITLES.length; i++) {
+    optHtml += '<option value="' + i + '"' + (i === cur ? ' selected' : '') + '>Slide ' + (i+1) + ': ' + SLIDE_TITLES[i] + '</option>';
+  }
+
+  var notesHtml = "";
+  if (showNotes && SLIDE_NOTES[cur]) {
+    notesHtml = '<div class="notes-panel"><strong>📝 Speaker Notes:</strong> ' + SLIDE_NOTES[cur] + '</div>';
+  }
+
+  var html = '<div class="slide-title">' + SLIDE_TITLES[cur] + '</div>'
+    + '<div class="slide-sub">' + SLIDE_SUBS[cur] + '</div>'
+    + '<div id="slide-inner">' + content + '</div>'
+    + notesHtml
+    + '<div class="nav">'
+    + '  <button class="nbtn" id="pbtn" onclick="prev()"' + (cur === 0 ? ' disabled' : '') + '>&#9664; Prev</button>'
+    + '  <select class="sselect" onchange="goTo(parseInt(this.value))">' + optHtml + '</select>'
+    + '  <button class="nbtn" id="nbtn2" onclick="next()"' + (cur === SLIDE_TITLES.length - 1 ? ' disabled' : '') + '>Next &#9654;</button>'
+    + '</div>';
+
+  document.getElementById("body").innerHTML = html;
+  document.getElementById("tabtitle").innerText = "💾 Slide " + (cur+1) + ": " + SLIDE_TITLES[cur];
+
+  // After rendering slide 7, wire up the inputs
+  if (cur === 7) {
+    document.getElementById("ls1").addEventListener("input", runCalc);
+    document.getElementById("ls2").addEventListener("input", runCalc);
+    document.getElementById("lalg").addEventListener("change", runCalc);
+    runCalc();
+  }
+}
+
+function prev() { if (cur > 0) { cur--; render(); } }
+function next() { if (cur < SLIDE_TITLES.length - 1) { cur++; render(); } }
+
+function toggleNotes() { showNotes = !showNotes; render(); }
+function toggleMenu() {
+  var m = document.getElementById("startmenu");
+  m.style.display = (m.style.display === "flex") ? "none" : "flex";
+}
+function toggleFS() {
+  if (!document.fullscreenElement) {
+    document.documentElement.requestFullscreen && document.documentElement.requestFullscreen();
+  } else {
+    document.exitFullscreen && document.exitFullscreen();
+  }
+}
+
+document.addEventListener("keydown", function(e) {
+  if (e.key === "ArrowRight" || e.key === "PageDown" || e.key === " ") next();
+  else if (e.key === "ArrowLeft" || e.key === "PageUp") prev();
+});
+
+// ─── Algorithm implementations ───────────────────────────────────────────────
+function levenshtein(a, b) {
+  var m = a.length, n = b.length;
+  var dp = [];
+  for (var i = 0; i <= m; i++) { dp[i] = []; for (var j = 0; j <= n; j++) dp[i][j] = 0; }
+  for (var i = 0; i <= m; i++) dp[i][0] = i;
+  for (var j = 0; j <= n; j++) dp[0][j] = j;
+  for (var i = 1; i <= m; i++) {
+    for (var j = 1; j <= n; j++) {
+      var cost = a[i-1] === b[j-1] ? 0 : 1;
+      dp[i][j] = Math.min(dp[i-1][j]+1, dp[i][j-1]+1, dp[i-1][j-1]+cost);
+    }
+  }
+  var dist = dp[m][n], max = Math.max(m,n);
+  var nd = max ? dist/max : 0;
+  return {dist: dist, sim: max-dist, ns: 1-nd, nd: nd};
+}
+
+function hamming(a, b) {
+  var len = Math.max(a.length, b.length), diff = 0;
+  for (var i = 0; i < len; i++) { if (a[i] !== b[i]) diff++; }
+  var nd = len ? diff/len : 0;
+  return {dist: diff, sim: len-diff, ns: 1-nd, nd: nd};
+}
+
+function jaccard(a, b) {
+  var sa = {}, sb = {};
+  for (var i = 0; i < a.length; i++) sa[a[i]] = 1;
+  for (var i = 0; i < b.length; i++) sb[b[i]] = 1;
+  var inter = 0, union = {};
+  for (var k in sa) { union[k] = 1; if (sb[k]) inter++; }
+  for (var k in sb) union[k] = 1;
+  var u = Object.keys(union).length;
+  var sim = u ? inter/u : 1;
+  return {dist: 1-sim, sim: sim, ns: sim, nd: 1-sim};
+}
+
+function cosine(a, b) {
+  var sa = {}, sb = {};
+  for (var i = 0; i < a.length; i++) sa[a[i]] = 1;
+  for (var i = 0; i < b.length; i++) sb[b[i]] = 1;
+  var inter = 0;
+  for (var k in sa) { if (sb[k]) inter++; }
+  var sza = Object.keys(sa).length, szb = Object.keys(sb).length;
+  var sim = (sza && szb) ? inter/Math.sqrt(sza*szb) : (sza===szb?1:0);
+  return {dist: 1-sim, sim: sim, ns: sim, nd: 1-sim};
+}
+
+function jaroWinkler(a, b) {
+  if (a === b) return {dist:0, sim:1, ns:1, nd:0};
+  if (!a.length || !b.length) return {dist:1, sim:0, ns:0, nd:1};
+  var mw = Math.floor(Math.max(a.length, b.length)/2) - 1;
+  if (mw < 0) mw = 0;
+  var m1 = new Array(a.length).fill(false);
+  var m2 = new Array(b.length).fill(false);
+  var matches = 0;
+  for (var i = 0; i < a.length; i++) {
+    var lo = Math.max(0, i-mw), hi = Math.min(i+mw+1, b.length);
+    for (var j = lo; j < hi; j++) {
+      if (m2[j] || a[i] !== b[j]) continue;
+      m1[i] = m2[j] = true; matches++; break;
+    }
+  }
+  if (!matches) return {dist:1, sim:0, ns:0, nd:1};
+  var t = 0, k = 0;
+  for (var i = 0; i < a.length; i++) {
+    if (!m1[i]) continue;
+    while (!m2[k]) k++;
+    if (a[i] !== b[k]) t++;
+    k++;
+  }
+  var jaro = (matches/a.length + matches/b.length + (matches-t/2)/matches)/3;
+  var p = 0;
+  for (var i = 0; i < Math.min(4, Math.min(a.length, b.length)); i++) {
+    if (a[i]===b[i]) p++; else break;
+  }
+  var jw = jaro + p*0.1*(1-jaro);
+  return {dist:1-jw, sim:jw, ns:jw, nd:1-jw};
+}
+
+function lcsSeq(a, b) {
+  var m = a.length, n = b.length;
+  var dp = [];
+  for (var i = 0; i <= m; i++) { dp[i] = []; for (var j = 0; j <= n; j++) dp[i][j] = 0; }
+  for (var i = 1; i <= m; i++) {
+    for (var j = 1; j <= n; j++) {
+      if (a[i-1] === b[j-1]) dp[i][j] = dp[i-1][j-1]+1;
+      else dp[i][j] = Math.max(dp[i-1][j], dp[i][j-1]);
+    }
+  }
+  var lcs = dp[m][n], max = Math.max(m,n);
+  var ns = max ? lcs/max : 1;
+  return {dist:max-lcs, sim:lcs, ns:ns, nd:1-ns};
+}
+
+function prefix(a, b) {
+  var p = 0;
+  while (p < a.length && p < b.length && a[p] === b[p]) p++;
+  var max = Math.max(a.length, b.length);
+  var ns = max ? p/max : 1;
+  return {dist:max-p, sim:p, ns:ns, nd:1-ns};
+}
+
+function runCalc() {
+  var a = (document.getElementById("ls1") ? document.getElementById("ls1").value : "") || "";
+  var b = (document.getElementById("ls2") ? document.getElementById("ls2").value : "") || "";
+  var alg = (document.getElementById("lalg") ? document.getElementById("lalg").value : "") || "levenshtein";
+  var box = document.getElementById("calc-out");
+  if (!box) return;
+  var r;
+  if (alg === "levenshtein") r = levenshtein(a, b);
+  else if (alg === "hamming") r = hamming(a, b);
+  else if (alg === "jaccard") r = jaccard(a, b);
+  else if (alg === "cosine") r = cosine(a, b);
+  else if (alg === "jaro_winkler") r = jaroWinkler(a, b);
+  else if (alg === "lcsseq") r = lcsSeq(a, b);
+  else if (alg === "prefix") r = prefix(a, b);
+  else r = levenshtein(a, b);
+
+  var pct = Math.round(r.ns * 100);
+  var filled = Math.round(r.ns * 16);
+  var bar = "";
+  for (var i = 0; i < 16; i++) bar += (i < filled ? "█" : "░");
+
+  box.innerHTML = '<div class="pxtext" style="font-size:22px;color:var(--blue);">Results: ' + alg + '</div>'
+    + '<table style="width:100%;margin-top:8px;font-family:Fira Code,monospace;font-size:14px;">'
+    + '<tr><td><strong>Similarity:</strong></td><td>' + r.sim.toFixed(4) + '</td></tr>'
+    + '<tr><td><strong>Distance:</strong></td><td>' + r.dist.toFixed(4) + '</td></tr>'
+    + '<tr><td><strong>Norm. Similarity:</strong></td><td>' + r.ns.toFixed(4) + ' (' + pct + '%)</td></tr>'
+    + '<tr><td><strong>Norm. Distance:</strong></td><td>' + r.nd.toFixed(4) + '</td></tr>'
+    + '</table>'
+    + '<div style="margin-top:12px;font-family:Fira Code,monospace;font-size:14px;color:var(--blue);">[' + bar + '] ' + pct + '%</div>';
+}
+
+// Clock
+function tick() {
+  var now = new Date();
+  document.getElementById("clk").innerText = now.toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'});
+}
+setInterval(tick, 1000);
+tick();
+
+// Initial render
+render();
+</script>
+</body>
+</html>
