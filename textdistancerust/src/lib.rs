@@ -18,7 +18,16 @@ pub mod traits;
 pub mod tversky;
 // monge_elkan module scoped out
 pub mod damerau_levenshtein;
-
+pub mod gotoh;
+pub mod hamming;
+pub mod jaro;
+pub mod lcsseq;
+pub mod lcsstr;
+pub mod levenshtein;
+pub mod mlipns;
+pub mod needleman_wunsch;
+pub mod ratcliff_obershelp;
+pub mod smith_waterman;
 pub use bag::Bag;
 pub use mra::Mra;
 pub use cosine::Cosine;
@@ -39,3 +48,13 @@ pub use traits::{DistanceMetric, SimilarityMetric};
 pub use tversky::Tversky;
 // MongeElkan re-export removed – scoped out
 pub use damerau_levenshtein::DamerauLevenshtein;
+pub use gotoh::Gotoh;
+pub use hamming::Hamming;
+pub use jaro::{Jaro, JaroWinkler};
+pub use lcsseq::LcsSeq;
+pub use lcsstr::LcsStr;
+pub use levenshtein::Levenshtein;
+pub use mlipns::Mlipns;
+pub use needleman_wunsch::NeedlemanWunsch;
+pub use ratcliff_obershelp::RatcliffObershelp;
+pub use smith_waterman::SmithWaterman;

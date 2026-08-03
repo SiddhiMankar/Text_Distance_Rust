@@ -10,3 +10,6 @@ __pycache__/
 *.pyc
 .hypothesis/
 .pytest_cache/
+
+# Ignore empty or old repo copies
+original_repo/

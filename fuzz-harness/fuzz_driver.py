@@ -251,7 +251,7 @@ def check_close(name: str, py_val, rust_val, alg: str, s1: str, s2: str):
 
 
 def main():
-    default_bin = Path(__file__).parent.parent / "textdistancerust" / "target" / "release" / "textdistancerust-cli.exe"
+    default_bin = Path(__file__).parent.parent / "textdistancerust" / "target" / "release" / "textdistancerust-cli"
     parser = argparse.ArgumentParser()
     parser.add_argument("--alg", required=True, help="Comma-separated algorithm names")
     parser.add_argument("--iterations", type=int, default=10000)
