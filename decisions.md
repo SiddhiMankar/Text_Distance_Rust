@@ -276,6 +276,11 @@ MRA receives raw `req.s1` and `req.s2` strings directly in `main.rs`. No `qval`,
 | **`Bag`** | `DistanceMetric` | Multiset difference distance $\max(\|A \setminus B\|, \|B \setminus A\|)$ with raw sequence length maximum normalization. | Verified (10k fuzz) |
 | **`MRA`** | Standalone (phonetic) | Match Rating Approach operates on raw `&str` inputs via its own phonetic encoder; does not use generic `SimilarityMetric<T>` trait. `normalized_similarity("","") = 1.0`. | Verified (10k fuzz) |
 | **`StrCmp95`** | Standalone / BaseSimilarity | Jaro-Winkler strcmp95 variant with phonetic/OCR character matrix (`sp_mx`), Winkler prefix scaling, optional `long_strings` tolerance adjustment, and Python whitespace trim. | Verified (10k fuzz) |
+| **`Hamming`** | `DistanceMetric` | Positional character mismatch distance with maximum equal to longer string length. Empty input `("", "")` returns `dist=0.0, max=0.0`. | Verified (10k fuzz) |
+| **`DamerauLevenshtein`** | `DistanceMetric` | Restricted Damerau-Levenshtein distance (optimal string alignment) supporting insertion, deletion, substitution, and adjacent transposition. | Verified (10k fuzz) |
+| **`RLENCD`** | `SimilarityMetric` | Run-Length Encoding Normalized Compression Distance. Compresses raw concatenated sequences, counting Unicode characters (`chars().count()`) to match Python `len()`. | Verified (10k fuzz) |
+| **`ArithNCD`** | `SimilarityMetric` | Arithmetic Coding Normalized Compression Distance. Preserves insertion order for equal counts (`Counter.most_common()`) and replicates CPython `frexp` log formula `((bits + log2(m)) * ln(2)) / ln(base)`. | Verified (10k fuzz) |
+| **`SqrtNCD`** | `SimilarityMetric` | Square-Root Normalized Compression Distance. Compressed size is $\sum \sqrt{\text{count}}$, using `f64` non-integer sizes matching Python `_get_size`. | Verified (10k fuzz) |
 
 ---
 
@@ -320,10 +325,37 @@ MRA receives raw `req.s1` and `req.s2` strings directly in `main.rs`. No `qval`,
 - **Type Mixing**: Python's `__call__` is annotated to return `float`, but computationally returns `int` (via integer matrix cells). Our Rust implementation correctly returns `usize` and converts to `f64` in the IPC harness to match the driver's generic expectations.
 - **`maximum()` Calculation**: The maximum bound is computed using raw input character counts (`max(len(s1), len(s2)) * mismatch_cost`) *before* the `.upper()` transformation is applied, even if `.upper()` expands multi-byte characters.
 - **Matrix Initialization Prepends**: The DP matrix initialization implicitly relies on prepending a space (`' '`) to strings before iterating (e.g., `s1 = ' ' + s1.upper()`). The space acts as an anchor for the `d_cost` and `r_cost` functions which evaluate `mismatch_cost` when interacting with spaces because they aren't in the initialized phonetic letter groups.
-- **Methods**: Inheriting from `_Base` makes `Editex` behave as a distance metric fundamentally (`__call__` = `distance()`), with `similarity()` dynamically calculated as `maximum() - distance()`.
+### Step 16: `Hamming`
+
+- **Different Length Handling**: Calculates positional character mismatches up to `min(len1, len2)`, plus `abs(len1 - len2)`.
+- **Maximum Bound**: Defined as `max(len(s1), len(s2))`.
+- **Parity**: 100% verified against Python `textdistance.Hamming` across 10,000+ fuzz iterations.
+
+### Step 17: `DamerauLevenshtein`
+
+- **Restricted Distance (OSA)**: Implements restricted Damerau-Levenshtein distance (Optimal String Alignment), allowing single insertions, deletions, substitutions, and adjacent transpositions.
+- **Maximum Bound**: Defined as `max(len(s1), len(s2))`.
+- **Parity**: 100% verified against Python `textdistance.DamerauLevenshtein` across 10,000+ fuzz iterations.
+
+### Step 18: `RLENCD` (Run-Length Encoding NCD)
+
+- **Raw Sequence Concatenation**: Python's `_NCDBase.__call__` joins raw sequences prior to calling `_compress`. Rust concatenates raw character slices before computing run-length encoding.
+- **Character Count vs Byte Length**: RLE compressed size must be measured using Unicode character count (`.chars().count()`) rather than UTF-8 byte length (`.len()`) to match Python `len(str)` behavior.
+- **Parity**: 100% verified against Python `textdistance.RLENCD` across 10,000+ fuzz iterations.
+
+### Step 19: `ArithNCD` (Arithmetic Coding NCD)
+
+- **Probability Table Ordering**: Preserves insertion order for characters with equal counts, matching Python `Counter.most_common()` behavior.
+- **CPython `math.log` Parity**: Computes logarithmic size using CPython's exact `frexp`-based floating-point formula `((bits + log2(mantissa)) * ln(2)) / ln(base)` for `BigUint` numerators, preventing `f64` overflow on long input sequences.
+- **Parity**: 100% verified against Python `textdistance.ArithNCD` across 10,000+ fuzz iterations.
+
+### Step 20: `SqrtNCD` (Square Root Based NCD)
+
+- **Non-Integer Compressed Sizes**: Compressed size equals $\sum \sqrt{\text{count}}$ over unique input elements. Rust uses `f64` sizes without rounding, matching Python's exact `float` return from `_get_size`.
+- **Parity**: 100% verified against Python `textdistance.SqrtNCD` across 10,000+ fuzz iterations.
 
 ---
-```
+
 ## MongeElkan — Scoped Out
 MongeElkan was investigated and found to depend on an upstream bug in the reference Python implementation (`textdistance/algorithms/token_based.py`, line 267): `self.algorithm.maximum(sequences)` passes the pair of sequences as a single unstarred tuple argument instead of `*sequences`. This causes `maximum` to return an incorrect bound (e.g., `2` for empty inputs), leading to mismatched similarity results. Rather than replicate this bug, the project deliberately excludes MongeElkan from the Rust port scope.
 
