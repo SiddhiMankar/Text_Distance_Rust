@@ -171,10 +171,16 @@ docker compose run --rm benchmark
 │   └── fuzz_driver.py              # Differential fuzz harness (Hypothesis)
 ├── artifacts/
 │   └── benchmark_report.md         # Generated latency benchmark report
-├── README.md                       # Project documentation
-├── DECISIONS.md                    # Parity decisions & scope log
-├── PROJECT_RULES.md                # Hard constraints and guidelines
-└── ROADMAP.md                      # Milestone breakdown
+├── docs/                           # Documentation suite
+│   ├── CONVERSION_SUMMARY.md       # Full conversion summary & algorithm matrix
+│   ├── decisions.md                # Technical decisions & parity log
+│   ├── project_rules.md            # Hard constraints and guidelines
+│   └── roadmap.md                  # Milestone breakdown
+├── ppt/                            # Interactive Vercel presentation
+│   ├── index.html                  # Main entry point for Vercel deployment
+│   └── presentation.html           # Win98 interactive presentation application
+├── README.md                       # Main project overview
+└── vercel.json                     # Static hosting routing config
 ```
 
 ---
