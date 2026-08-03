@@ -1,0 +1,14 @@
+{
+  "version": 2,
+  "outputDirectory": "ppt",
+  "routes": [
+    {
+      "src": "/",
+      "dest": "/index.html"
+    },
+    {
+      "src": "/presentation",
+      "dest": "/presentation.html"
+    }
+  ]
+}
