@@ -330,3 +330,26 @@ MongeElkan was investigated and found to depend on an upstream bug in the refere
 * **Decision**: Do not implement MongeElkan in `textdistancerust`.
 * **Reasoning**: The algorithm's behavior hinges on a documented upstream bug; preserving correctness requires either fixing the Python code (outside project scope) or omitting the algorithm. To keep the Rust implementation faithful and avoid reproducing known bugs, we scoped it out.
 * **Action**: Removed module export and IPC match arm; no further code related to MongeElkan remains.
+
+## 21. Gotoh Asymmetric Empty Input Crash Protection
+* **Decision**: Handle asymmetric empty string inputs (one empty, one non-empty) by returning an explicit TextDistanceError::InvalidParameter.
+* **Empirical Python Upstream Bug Verification**:
+  `python
+  import textdistance
+  textdistance.Gotoh()('', 'a')
+  ``r
+  **Traceback**:
+  `	ext
+  Traceback (most recent call last):
+    File "<string>", line 1, in <module> 
+      import textdistance; print(textdistance.Gotoh().similarity('', 'a'))
+    File "C:\Projects\Post_Mortem\textdistance\textdistance\algorithms\base.py", line 179, in similarity
+      return self(*sequences)
+    File "C:\Projects\Post_Mortem\textdistance\textdistance\algorithms\edit_based.py", line 619, in __call__
+      p_mat[1, j] = -self.gap_open
+  IndexError: index 1 is out of bounds for axis 0 with size 1
+  ``r
+* **Reasoning**:
+  * In Python 	extdistance, Gotoh()('', 'a') raises IndexError because the DP matrix is initialized with xis 0 having size 1 (since s1 is empty), and then the inner loop attempts to write to index 1.
+  * To maintain strict resilience without silently guessing  .0, the Rust implementation catches asymmetric empty inputs immediately and returns a descriptive error rather than evaluating the DP loops or assuming a mathematically dubious default score.
+

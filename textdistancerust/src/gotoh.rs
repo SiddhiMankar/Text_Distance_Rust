@@ -26,6 +26,12 @@ impl<T: PartialEq> SimilarityMetric<T> for Gotoh {
         let rows = s1.len() + 1;
         let cols = s2.len() + 1;
 
+        if (s1.is_empty() && !s2.is_empty()) || (!s1.is_empty() && s2.is_empty()) {
+            return Err(TextDistanceError::InvalidParameter(
+                "Upstream Python implementation raises IndexError on asymmetric empty strings".to_string(),
+            ));
+        }
+
         let mut d_prev = vec![0.0; cols];
         let mut d_cur = vec![0.0; cols];
         let mut p_prev = vec![0.0; cols];
