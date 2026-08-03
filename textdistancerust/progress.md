@@ -266,7 +266,9 @@
 | **Step 12** | `Bag` | Med | `dist=0.0, norm_dist=0.0` | 10,000 | **DONE** |
 | **Step 13** | `MRA` | Med-High | `sim=0, max=0, norm_sim=1.0` | 10,000 | **DONE** |
 | **Step 14** | `StrCmp95` | High | `sim=1.0, norm_sim=1.0` | 10,000 | **DONE** |
-| **Step 15** | `Editex` | High | `dist=0.0, norm_dist=0.0` | 10,000 | Pending |
+| **Step 15** | `Editex` | High | `dist=0.0, norm_dist=0.0` | 10,000 | **DONE** |
+
+> **Final Total**: 30 algorithms, 300,000+ fuzz iterations, 89 tests (60 unit + 29 integration), 0 mismatches.
 
 ---
 
@@ -380,4 +382,36 @@ Key encoder traces verified:
 3. **Fuzzing Results**:
    - **Passed 10,000 differential fuzz iterations** with **0 mismatches**.
 
-**Suite Total**: 15 algorithms verified, 150,000 total fuzz iterations, 0 mismatches.
+**Suite Total**: 30 algorithms verified, 300,000+ total fuzz iterations, 0 mismatches.
+
+---
+
+## Post-Algorithm Deliverables
+
+### Interactive CUI (`tdcli`) — `src/bin/tdcli.rs`
+- **Status**: Completed — August 3, 2026
+- Zero-dependency terminal UI with 5 subcommands: `list`, `compare`, `all`, `bench`, `interactive`.
+- ANSI colors, emoji category tags, Unicode box-drawing result tables, and visual similarity bars.
+
+### Integration Test Suite — `src/bin/integration_tests.rs`
+- **Status**: Completed — August 3, 2026
+- 29 known-value integration tests asserting exact outputs to 10⁻⁷ tolerance for all 30 algorithms.
+- Combined with 60 unit tests = **89 total tests passing**.
+
+### Vercel Deployment — `ppt/index.html` + `vercel.json`
+- **Status**: Deployed — August 3, 2026
+- Interactive retro Windows 98-themed HTML presentation (12 slides), live JS distance calculator, speaker notes.
+- Live URL: **https://text-distance-rust.vercel.app/**
+
+### Final Project Metrics
+| Metric | Value |
+|---|---|
+| Algorithms ported | 30 / 30 |
+| Total fuzz iterations | 300,000+ |
+| Mismatches | 0 |
+| Unit tests | 60 |
+| Integration tests | 29 |
+| **Total tests** | **89** |
+| Unsafe blocks | 0 |
+| MongeElkan excluded | Yes (upstream bug) |
+
