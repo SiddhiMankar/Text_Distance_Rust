@@ -6,7 +6,8 @@
 [![Docker Ready](https://img.shields.io/badge/docker-ready-blue.svg)]()
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
-For the demonstration, [`click here`](https://text-distance-rust.vercel.app/)
+## For the demonstration, [`click here`](https://text-distance-rust.vercel.app/)
+
 `textdistancerust` is a standalone, safe Rust reimplementation of Python's popular sequence distance library [`life4/textdistance`](https://github.com/life4/textdistance).
 
 It delivers **100% behavioral equivalence** (down to $\le 10^{-9}$ floating-point precision) against the Python reference implementation across **30 algorithms**, validated with differential property-based fuzz testing (10,000+ iterations per algorithm, 0 mismatches) and a 89-test unit/integration test suite.
