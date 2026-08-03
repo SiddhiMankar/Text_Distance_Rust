@@ -48,11 +48,7 @@ impl Editex {
         Editex::default()
     }
 
-    pub fn with_costs(
-        match_cost: usize,
-        group_cost: usize,
-        mismatch_cost: usize,
-    ) -> Self {
+    pub fn with_costs(match_cost: usize, group_cost: usize, mismatch_cost: usize) -> Self {
         let mut e = Editex::default();
         e.match_cost = match_cost;
         e.group_cost = max(group_cost, match_cost);

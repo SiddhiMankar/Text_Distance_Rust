@@ -26,7 +26,10 @@ mod tests {
 
     #[test]
     fn test_to_word_vec() {
-        assert_eq!(to_word_vec("hello world text"), vec!["hello", "world", "text"]);
+        assert_eq!(
+            to_word_vec("hello world text"),
+            vec!["hello", "world", "text"]
+        );
         assert_eq!(to_word_vec("   spaced   out  "), vec!["spaced", "out"]);
         assert_eq!(to_word_vec(""), Vec::<&str>::new());
     }

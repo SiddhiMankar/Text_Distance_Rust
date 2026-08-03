@@ -22,11 +22,7 @@ impl Prefix {
     }
 
     pub fn prefix<'a, T: PartialEq>(&self, s1: &'a [T], s2: &'a [T]) -> &'a [T] {
-        let len = s1
-            .iter()
-            .zip(s2.iter())
-            .take_while(|(a, b)| a == b)
-            .count();
+        let len = s1.iter().zip(s2.iter()).take_while(|(a, b)| a == b).count();
         &s1[..len]
     }
 }

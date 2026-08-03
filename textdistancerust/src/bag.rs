@@ -28,11 +28,7 @@ impl Bag {
         Bag { qval, as_set }
     }
 
-    pub fn distance_sequences<T: PartialEq + Eq + Hash + Clone>(
-        &self,
-        s1: &[T],
-        s2: &[T],
-    ) -> f64 {
+    pub fn distance_sequences<T: PartialEq + Eq + Hash + Clone>(&self, s1: &[T], s2: &[T]) -> f64 {
         if s1.is_empty() && s2.is_empty() {
             return 0.0;
         }

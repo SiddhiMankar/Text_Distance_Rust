@@ -107,7 +107,7 @@ fn process_request(req: &FuzzRequest) -> FuzzResponse {
                 len_metric.normalized_distance(&s1_chars, &s2_chars),
                 len_metric.normalized_similarity(&s1_chars, &s2_chars),
             ) {
-                (Ok(dist), Ok(sim), Ok(norm_dist), Ok(norm_sim)) => FuzzResponse {
+                (Ok(dist), Ok(sim), Ok(_norm_dist), Ok(norm_sim)) => FuzzResponse {
                     similarity: Some(sim),
                     distance: Some(dist),
                     normalized_similarity: Some(norm_sim),
@@ -1187,7 +1187,7 @@ fn process_request(req: &FuzzRequest) -> FuzzResponse {
             let mra = Mra::new();
             FuzzResponse {
                 similarity: None,
-                distance: Some(mra.distance(&req.s1, &req.s2).unwrap() as f64),
+                distance: Some(mra.distance(&req.s1, &req.s2).unwrap()),
                 normalized_similarity: None,
                 normalized_distance: None,
                 subsequence: None,
@@ -1219,7 +1219,130 @@ fn process_request(req: &FuzzRequest) -> FuzzResponse {
                 error: None,
             }
         }
-
+        "hamming" => {
+            let hamming = Hamming::new();
+            match (
+                hamming.distance(&s1_chars, &s2_chars),
+                hamming.similarity(&s1_chars, &s2_chars),
+                hamming.normalized_distance(&s1_chars, &s2_chars),
+                hamming.normalized_similarity(&s1_chars, &s2_chars),
+            ) {
+                (Ok(dist), Ok(sim), Ok(norm_dist), Ok(norm_sim)) => FuzzResponse {
+                    similarity: Some(sim),
+                    distance: Some(dist),
+                    normalized_similarity: Some(norm_sim),
+                    normalized_distance: Some(norm_dist),
+                    subsequence: None,
+                    error: None,
+                },
+                _ => FuzzResponse {
+                    similarity: None,
+                    distance: None,
+                    normalized_similarity: None,
+                    normalized_distance: None,
+                    subsequence: None,
+                    error: Some("Calculation failed".to_string()),
+                },
+            }
+        }
+        "damerau_levenshtein" => {
+            let dl = DamerauLevenshtein::new();
+            match (
+                DistanceMetric::distance(&dl, &s1_chars, &s2_chars),
+                SimilarityMetric::similarity(&dl, &s1_chars, &s2_chars),
+                DistanceMetric::normalized_distance(&dl, &s1_chars, &s2_chars),
+                DistanceMetric::normalized_similarity(&dl, &s1_chars, &s2_chars),
+            ) {
+                (Ok(dist), Ok(sim), Ok(norm_dist), Ok(norm_sim)) => FuzzResponse {
+                    similarity: Some(sim),
+                    distance: Some(dist),
+                    normalized_similarity: Some(norm_sim),
+                    normalized_distance: Some(norm_dist),
+                    subsequence: None,
+                    error: None,
+                },
+                _ => FuzzResponse {
+                    similarity: None,
+                    distance: None,
+                    normalized_similarity: None,
+                    normalized_distance: None,
+                    subsequence: None,
+                    error: Some("Calculation failed".to_string()),
+                },
+            }
+        }
+        "rle_ncd" => {
+            let rle = RlenCd::new();
+            match (
+                rle.distance(&s1_chars, &s2_chars),
+                rle.similarity(&s1_chars, &s2_chars),
+            ) {
+                (Ok(dist), Ok(sim)) => FuzzResponse {
+                    similarity: Some(sim),
+                    distance: Some(dist),
+                    normalized_similarity: Some(sim),
+                    normalized_distance: Some(dist),
+                    subsequence: None,
+                    error: None,
+                },
+                _ => FuzzResponse {
+                    similarity: None,
+                    distance: None,
+                    normalized_similarity: None,
+                    normalized_distance: None,
+                    subsequence: None,
+                    error: Some("Calculation failed".to_string()),
+                },
+            }
+        }
+        "arith_ncd" => {
+            let arith = ArithNcd::new();
+            match (
+                arith.distance(&s1_chars, &s2_chars),
+                arith.similarity(&s1_chars, &s2_chars),
+            ) {
+                (Ok(dist), Ok(sim)) => FuzzResponse {
+                    similarity: Some(sim),
+                    distance: Some(dist),
+                    normalized_similarity: Some(sim),
+                    normalized_distance: Some(dist),
+                    subsequence: None,
+                    error: None,
+                },
+                _ => FuzzResponse {
+                    similarity: None,
+                    distance: None,
+                    normalized_similarity: None,
+                    normalized_distance: None,
+                    subsequence: None,
+                    error: Some("Calculation failed".to_string()),
+                },
+            }
+        }
+        "sqrt_ncd" => {
+            let sqrt = SqrtNcd::new();
+            match (
+                sqrt.distance(&s1_chars, &s2_chars),
+                sqrt.similarity(&s1_chars, &s2_chars),
+            ) {
+                (Ok(dist), Ok(sim)) => FuzzResponse {
+                    similarity: Some(sim),
+                    distance: Some(dist),
+                    normalized_similarity: Some(sim),
+                    normalized_distance: Some(dist),
+                    subsequence: None,
+                    error: None,
+                },
+                _ => FuzzResponse {
+                    similarity: None,
+                    distance: None,
+                    normalized_similarity: None,
+                    normalized_distance: None,
+                    subsequence: None,
+                    error: Some("Calculation failed".to_string()),
+                },
+            }
+        }
         _ => FuzzResponse {
             similarity: None,
             distance: None,

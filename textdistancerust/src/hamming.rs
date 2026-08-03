@@ -1,5 +1,5 @@
-use crate::traits::DistanceMetric;
 use crate::error::TextDistanceError;
+use crate::traits::DistanceMetric;
 
 #[derive(Default)]
 pub struct Hamming;

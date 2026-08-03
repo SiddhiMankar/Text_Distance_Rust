@@ -4,17 +4,9 @@ use crate::error::TextDistanceError;
 use crate::jaccard::Jaccard;
 use crate::traits::SimilarityMetric;
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, Default)]
 pub struct Tanimoto {
     pub jaccard: Jaccard,
-}
-
-impl Default for Tanimoto {
-    fn default() -> Self {
-        Tanimoto {
-            jaccard: Jaccard::default(),
-        }
-    }
 }
 
 impl Tanimoto {

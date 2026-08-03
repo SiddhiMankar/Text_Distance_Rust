@@ -46,7 +46,10 @@ mod tests {
         assert_eq!(len_metric.distance(&s1, &s2).unwrap(), 5.0);
         assert_eq!(len_metric.maximum(&s1, &s2), 8.0);
         assert_eq!(len_metric.normalized_distance(&s1, &s2).unwrap(), 5.0 / 8.0);
-        assert_eq!(len_metric.normalized_similarity(&s1, &s2).unwrap(), 3.0 / 8.0);
+        assert_eq!(
+            len_metric.normalized_similarity(&s1, &s2).unwrap(),
+            3.0 / 8.0
+        );
     }
 
     #[test]

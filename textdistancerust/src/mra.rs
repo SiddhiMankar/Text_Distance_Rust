@@ -36,7 +36,6 @@
 ///    - Update lengths.
 /// 4. `similarity = max_length - max(final_lengths)`.
 ///    When all chars matched, final lengths = `[0, 0]` → `similarity = max_length`.
-
 use crate::error::TextDistanceError;
 
 #[derive(Debug, Clone, Copy, Default)]
@@ -84,7 +83,10 @@ impl Mra {
         // Step 4: truncate to first 3 + last 3 if longer than 6
         let chars_vec: Vec<char> = deduped.chars().collect();
         if chars_vec.len() > 6 {
-            chars_vec[..3].iter().chain(chars_vec[chars_vec.len() - 3..].iter()).collect()
+            chars_vec[..3]
+                .iter()
+                .chain(chars_vec[chars_vec.len() - 3..].iter())
+                .collect()
         } else {
             chars_vec.into_iter().collect()
         }
@@ -110,7 +112,7 @@ impl Mra {
         let max_length = len1.max(len2);
 
         // Threshold check: abs(max_len - min_len) > count → 0
-        let len_diff = if len1 > len2 { len1 - len2 } else { len2 - len1 };
+        let len_diff = len1.abs_diff(len2);
         if len_diff > count {
             return 0.0;
         }
@@ -131,10 +133,14 @@ impl Mra {
             }
 
             // Reconstruct each sequence from non-matching pairs + tail beyond minlen
-            let new_s1: Vec<char> = non_matching_pairs.iter().map(|(c, _)| *c)
+            let new_s1: Vec<char> = non_matching_pairs
+                .iter()
+                .map(|(c, _)| *c)
                 .chain(seq1[minlen..].iter().copied())
                 .collect();
-            let new_s2: Vec<char> = non_matching_pairs.iter().map(|(_, c)| *c)
+            let new_s2: Vec<char> = non_matching_pairs
+                .iter()
+                .map(|(_, c)| *c)
                 .chain(seq2[minlen..].iter().copied())
                 .collect();
 
@@ -247,7 +253,7 @@ mod tests {
         // diff=1 ≤ 2 → proceed. After 2 iterations: similarity=2
         assert_eq!(m.compute("cat", "cats"), 2.0);
         assert_eq!(m.similarity("cat", "cats").unwrap(), 2.0);
-        assert_eq!(m.distance("cat", "cats").unwrap(), 1.0);      // 3 - 2 = 1
+        assert_eq!(m.distance("cat", "cats").unwrap(), 1.0); // 3 - 2 = 1
         let norm_sim = m.normalized_similarity("cat", "cats").unwrap();
         assert!((norm_sim - 2.0 / 3.0).abs() < 1e-9);
         let norm_dist = m.normalized_distance("cat", "cats").unwrap();

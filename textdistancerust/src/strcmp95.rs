@@ -9,29 +9,50 @@
 /// - `distance` = `maximum - similarity` = `1.0 - similarity`
 /// - `normalized_similarity` = `similarity / maximum` = `similarity`
 /// - `normalized_distance` = `1.0 - normalized_similarity`
-
 use crate::error::TextDistanceError;
 
 const SP_MX: &[(char, char)] = &[
-    ('A', 'E'), ('A', 'I'), ('A', 'O'), ('A', 'U'), ('B', 'V'), ('E', 'I'),
-    ('E', 'O'), ('E', 'U'), ('I', 'O'), ('I', 'U'), ('O', 'U'), ('I', 'Y'),
-    ('E', 'Y'), ('C', 'G'), ('E', 'F'), ('W', 'U'), ('W', 'V'), ('X', 'K'),
-    ('S', 'Z'), ('X', 'S'), ('Q', 'C'), ('U', 'V'), ('M', 'N'), ('L', 'I'),
-    ('Q', 'O'), ('P', 'R'), ('I', 'J'), ('2', 'Z'), ('5', 'S'), ('8', 'B'),
-    ('1', 'I'), ('1', 'L'), ('0', 'O'), ('0', 'Q'), ('C', 'K'), ('G', 'J'),
+    ('A', 'E'),
+    ('A', 'I'),
+    ('A', 'O'),
+    ('A', 'U'),
+    ('B', 'V'),
+    ('E', 'I'),
+    ('E', 'O'),
+    ('E', 'U'),
+    ('I', 'O'),
+    ('I', 'U'),
+    ('O', 'U'),
+    ('I', 'Y'),
+    ('E', 'Y'),
+    ('C', 'G'),
+    ('E', 'F'),
+    ('W', 'U'),
+    ('W', 'V'),
+    ('X', 'K'),
+    ('S', 'Z'),
+    ('X', 'S'),
+    ('Q', 'C'),
+    ('U', 'V'),
+    ('M', 'N'),
+    ('L', 'I'),
+    ('Q', 'O'),
+    ('P', 'R'),
+    ('I', 'J'),
+    ('2', 'Z'),
+    ('5', 'S'),
+    ('8', 'B'),
+    ('1', 'I'),
+    ('1', 'L'),
+    ('0', 'O'),
+    ('0', 'Q'),
+    ('C', 'K'),
+    ('G', 'J'),
 ];
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, Default)]
 pub struct StrCmp95 {
     pub long_strings: bool,
-}
-
-impl Default for StrCmp95 {
-    fn default() -> Self {
-        StrCmp95 {
-            long_strings: false,
-        }
-    }
 }
 
 impl StrCmp95 {
@@ -100,7 +121,7 @@ impl StrCmp95 {
         let yl1 = len_s2 - 1;
         for i in 0..len_s1 {
             let sc1 = s1_clean[i];
-            let lowlim = if i >= search_range { i - search_range } else { 0 };
+            let lowlim = i.saturating_sub(search_range);
             let hilim = (i + search_range).min(yl1);
             for j in lowlim..=hilim {
                 if s2_flag[j] == 0 && s2_clean[j] == sc1 {
